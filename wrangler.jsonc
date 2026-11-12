@@ -1,0 +1,9 @@
+{
+  "name": "wypha-microsite-v20",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  }
+}

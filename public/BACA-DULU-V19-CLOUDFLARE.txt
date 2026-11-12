@@ -1,0 +1,41 @@
+================================================================================
+PEMBARUAN UTAMA WYPHA STUDIO & MICROSITE V20.1
+(ANTI-PENCURIAN KODE & PIN: 1 KODE + 1 PIN HANYA BISA DI 1 PERANGKAT SAJA!)
+================================================================================
+1. MENGAPA DI V20.1 PENCURI YANG PUNYA KODE & PIN SAMA TETAP DITOLAK DI HP LAIN?
+   - Setiap HP yang membuka microsite menghasilkan "ID Perangkat Unik"
+     (`W20-XXXX-XXXX`) yang dibentuk dari kombinasi Sidik Jari Perangkat Keras
+     (Hardware Fingerprint) + Token Kriptografis unik yang tidak akan pernah
+     sama antar-HP (sekalipun merek dan tipe HP-nya kembar!).
+   - "Kode Kunci 1-Perangkat" (`KHP-XXXX-XXXX`) dihitung secara matematis dari
+     rumus `HMAC(ID_Perangkat_Customer + PIN + ProjectID)`.
+   - Artinya: Kode Kunci `KHP-XXXX-XXXX` dan PIN `1234` milik Customer HANYA
+     COCOK secara matematis di HP Customer tersebut!
+   - Ketika pencuri mencuri Kode Kunci `KHP-XXXX-XXXX` DAN mencuri PIN `1234`,
+     lalu mengetikkan keduanya di HP pencuri (yang memiliki ID Perangkat
+     berbeda), rumus verifikasi di HP pencuri LANGSUNG MENOLAK KEDUANYA!
+     Si pencuri hanya bisa melihat isi microsite saja (Read-Only).
+
+2. CARA MENGUJI LANGSUNG FITUR ANTI-PENCURIAN DI LAYAR ANDA:
+   - Buka microsite (`QR-PERSONAL-DIARY-CUSTOMER-V20.html`), klik tombol
+     "🔑 PIN" di kiri atas.
+   - Klik tombol biru "📲 Isi Kode Kunci HP Ini untuk Mengikat Slot 1/1", ketik
+     PIN `1234`, lalu klik Verifikasi. Kini Slot 1/1 terkunci mati di HP Anda!
+   - Selanjutnya, klik tombol kuning "🕵️ Uji HP Pencuri (Kode+PIN Sama)" di
+     baris paling atas layar.
+   - Sekarang aplikasi berada dalam mode HP ke-2 (HP Pencuri dengan ID
+     `W20-THIEF-99X2`). Klik tombol merah "🧪 Isi Kode & PIN Curian & Uji Tolak"
+     yang akan mengisi Kode Kunci DAN PIN yang 100% SAMA PERSIS milik Customer.
+   - Hasilnya: Sistem LANGSUNG MENOLAK Kode & PIN tersebut karena Kuota 1/1
+     sudah terkunci pada ID Perangkat HP Utama Customer!
+
+3. DUA MODE PENGGUNAAN UNTUK PELANGGAN ANDA:
+   - Mode Tanpa Server (100% Offline/Statis via Kalkulator Studio V20.1):
+     Customer mengirimkan `ID Perangkat` (`W20-XXXX-XXXX`) yang tampil di
+     layarnya, lalu Anda memasukkannya ke "Generator Kode Kunci 1-HP" di Studio
+     V20.1 untuk mendapatkan kode `KHP-XXXX-XXXX` yang hanya hidup di HP itu.
+   - Mode Otomatis Cloud 1-Device Claim (Tanpa Tanya ID-HP):
+     Paket ZIP ini sudah menyertakan `functions/api/device-lock.js` (untuk
+     Cloudflare Pages) dan `GOOGLE-APPS-SCRIPT-1-DEVICE-LOCK.txt` yang otomatis
+     mengunci kode ke HP pertama yang mengklaimnya dan menolak HP ke-2.
+================================================================================
