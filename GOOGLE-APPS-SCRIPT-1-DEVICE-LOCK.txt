@@ -1,0 +1,46 @@
+// ============================================================================
+// GOOGLE APPS SCRIPT: SERVER PENGUNCI 1 PERANGKAT TUNGGAL WYPHA V20.1 (OPSIONAL)
+// Cara Pakai (Gratis di Google Drive/Sheets Anda):
+// 1. Buka https://script.google.com -> Proyek Baru -> Tempel kode di bawah ini.
+// 2. Klik Terapkan (Deploy) -> Deployment Baru -> Aplikasi Web (Web App)
+//    - Jalankan sebagai: Saya (Me)
+//    - Siapa yang memiliki akses: Siapa saja (Anyone)
+// 3. Salin URL Web App lalu tempelkan ke kolom "URL Server Kunci 1-HP" di Studio V20.1.
+// ============================================================================
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var data = JSON.parse(e.postData.contents || '{}');
+    var projectId = String(data.projectId || 'wypha').trim();
+    var deviceId = String(data.deviceId || '').trim().toUpperCase();
+    var props = PropertiesService.getScriptProperties();
+    var key = 'WYPHA_LOCK_' + projectId;
+    var existingOwner = props.getProperty(key);
+
+    if (!existingOwner) {
+      props.setProperty(key, deviceId);
+      return ContentService.createTextOutput(JSON.stringify({
+        ok: true,
+        status: 'CLAIMED_SLOT_1_OF_1',
+        ownerDeviceId: deviceId
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (existingOwner === deviceId) {
+      return ContentService.createTextOutput(JSON.stringify({
+        ok: true,
+        status: 'VERIFIED_OWNER_DEVICE',
+        ownerDeviceId: existingOwner
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      ok: false,
+      status: 'REJECTED_SECOND_DEVICE',
+      ownerDeviceId: existingOwner
+    })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
