@@ -1,0 +1,445 @@
+// ============================================================================
+// GOOGLE APPS SCRIPT TERINTEGRASI GOOGLE SHEETS — WYPHA V21 (MAKSIMAL 2 PERANGKAT)
+// ============================================================================
+// FITUR UTAMA V21:
+// 1. Membatasi klaim kunci untuk MAKSIMAL 2 PERANGKAT SAJA (Slot 1/2 dan Slot 2/2)
+//    per Project ID di tab "Daftar_Kunci_Perangkat" Google Sheets Anda.
+// 2. Perangkat ke-3 dan seterusnya OTOMATIS DITOLAK (baik saat memasukkan PIN
+//    Utama maupun Master PIN / Kunci Ganda), kecuali di-reset terlebih dahulu
+//    di Google Sheets ini!
+// 3. Menampilkan kolom lengkap:
+//    A: Project ID | B: Nama Customer | C: ID-HP Terdaftar (Maks 2 HP: Slot 1 & 2) |
+//    D: Status Kunci (1/2 atau 2/2) | E: Waktu Klaim Pertama | F: Terakhir Verifikasi |
+//    G: Percobaan HP ke-3+ Ditolak | H: Catatan Admin
+// 4. Menyediakan menu khusus "🛡️ Admin Kunci 2-HP WYPHA" di bagian atas Google
+//    Sheets Anda untuk:
+//    - 🔄 Siapkan & Sinkronkan Tabel Kunci Perangkat
+//    - 🔓 Reset Kunci Penuh (0/2) pada Baris yang Dipilih
+//    - 📱 Hapus HP ke-2 Saja pada Baris yang Dipilih (Sisakan HP ke-1 -> 1/2)
+//    - 🧪 Tambah Baris Tes (Uji Reaksi Tabel)
+//    - 🗑️ Reset Semua Kunci Perangkat
+//
+// CARA UPDATE DI GOOGLE SHEETS ANDA:
+// 1. Buka Google Sheets Anda:
+//    https://docs.google.com/spreadsheets/d/1stMb-JL7yz08qsUK7gkEBb-CXB7ZZHbTu5H6rliw2KI/edit
+// 2. Klik menu "Ekstensi" (Extensions) -> "Apps Script".
+// 3. Hapus kode lama di Code.gs, lalu TEMPEL (Paste) seluruh kode V21 ini.
+// 4. Klik Simpan (💾), lalu klik tombol biru "Terapkan" (Deploy) ->
+//    "Kelola deployment" (Manage deployments) -> Klik ikon Pensil (Edit) ->
+//    Pilih Versi: "Versi baru" (New version) -> Klik "Terapkan" (Deploy).
+// ============================================================================
+
+var SHEET_ID = '1stMb-JL7yz08qsUK7gkEBb-CXB7ZZHbTu5H6rliw2KI';
+var SHEET_NAME = 'Daftar_Kunci_Perangkat';
+var MAX_DEVICES = 2;
+
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('🛡️ Admin Kunci 2-HP WYPHA')
+      .addItem('🔄 Siapkan & Sinkronkan Tabel Kunci Perangkat', 'setupSheet')
+      .addItem('🔓 Reset Kunci Penuh (0/2) pada Baris yang Dipilih', 'resetSelectedRowLock')
+      .addItem('📱 Hapus HP ke-2 Saja pada Baris yang Dipilih (Sisakan HP ke-1)', 'removeSecondDeviceOnSelectedRow')
+      .addSeparator()
+      .addItem('🧪 Tambah Baris Tes (Uji Reaksi Tabel)', 'setupSheetAndTest')
+      .addItem('🗑️ Reset Semua Kunci Perangkat', 'resetAllDeviceLocks')
+      .addToUi();
+  } catch (err) {}
+}
+
+function parseDeviceList_(raw) {
+  if (!raw) return [];
+  var parts = String(raw).split(/[,|;\n]+/);
+  var out = [];
+  for (var i = 0; i < parts.length; i++) {
+    var clean = String(parts[i] || '').trim().toUpperCase();
+    if (clean && out.indexOf(clean) === -1 && out.length < MAX_DEVICES) {
+      out.push(clean);
+    }
+  }
+  return out;
+}
+
+function getTargetSheet_() {
+  var ss = null;
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+  } catch (e) {}
+  if (!ss) {
+    ss = SpreadsheetApp.openById(SHEET_ID);
+  }
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+  }
+  if (sheet.getLastRow() === 0) {
+    var headers = [
+      'Project ID',
+      'Nama Customer',
+      'ID-HP Terdaftar (Maks 2 HP: Slot 1/2 & 2/2)',
+      'Status Kunci',
+      'Waktu Klaim Pertama',
+      'Terakhir Verifikasi',
+      'Percobaan HP ke-3+ Ditolak',
+      'Catatan Admin'
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setFontWeight('bold')
+      .setBackground('#0f172a')
+      .setFontColor('#38bdf8');
+    sheet.setFrozenRows(1);
+    for (var c = 1; c <= headers.length; c++) {
+      sheet.setColumnWidth(c, c === 3 ? 260 : (c <= 2 ? 200 : 175));
+    }
+  } else {
+    sheet.getRange(1, 3).setValue('ID-HP Terdaftar (Maks 2 HP: Slot 1/2 & 2/2)');
+    sheet.getRange(1, 7).setValue('Percobaan HP ke-3+ Ditolak');
+  }
+  return sheet;
+}
+
+function formatWibNow_() {
+  return Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss') + ' WIB';
+}
+
+function setupSheet() {
+  var sheet = getTargetSheet_();
+  var props = PropertiesService.getScriptProperties().getProperties();
+  var data = sheet.getDataRange().getValues();
+  var existingRows = {};
+  for (var i = 1; i < data.length; i++) {
+    var pid = String(data[i][0] || '').trim();
+    if (pid) existingRows[pid] = i + 1;
+  }
+  var nowStr = formatWibNow_();
+  for (var k in props) {
+    if (k.indexOf('WYPHA_LOCK_') === 0) {
+      var projId = k.replace('WYPHA_LOCK_', '');
+      var devList = parseDeviceList_(props[k]);
+      if (devList.length && !existingRows[projId]) {
+        sheet.appendRow([
+          projId,
+          'Customer (' + projId + ')',
+          devList.join(' | '),
+          'TERKUNCI (' + devList.length + '/' + MAX_DEVICES + ')',
+          nowStr,
+          nowStr,
+          0,
+          'Disinkronkan dari ScriptProperties'
+        ]);
+      }
+    }
+  }
+  return sheet;
+}
+
+function setupSheetAndTest() {
+  var res = handleLockAction_({
+    action: 'claim_or_verify',
+    projectId: 'TEST-CONNECTION-V21',
+    customerName: 'Uji Koneksi Tabel WYPHA (Maks 2 HP)',
+    deviceId: 'W20-TEST-1111',
+    code: 'KHP-TEST'
+  });
+  Logger.log(JSON.stringify(res));
+}
+
+function findRowByProjectId_(sheet, projectId) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var target = String(projectId || '').trim().toLowerCase();
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][0] || '').trim().toLowerCase() === target) {
+      return i + 2;
+    }
+  }
+  return -1;
+}
+
+function handleLockAction_(data) {
+  var action = String(data.action || 'claim_or_verify').trim();
+  var projectId = String(data.projectId || 'wypha').trim();
+  var customerName = String(data.customerName || '').trim();
+  var deviceId = String(data.deviceId || '').trim().toUpperCase();
+  var props = PropertiesService.getScriptProperties();
+  var propKey = 'WYPHA_LOCK_' + projectId;
+  var sheet = getTargetSheet_();
+  var rowIdx = findRowByProjectId_(sheet, projectId);
+  var nowStr = formatWibNow_();
+
+  if (action === 'status' || action === 'list') {
+    var sheetOwners = rowIdx > 0 ? parseDeviceList_(sheet.getRange(rowIdx, 3).getValue()) : [];
+    var existingList = sheetOwners.length ? sheetOwners : parseDeviceList_(props.getProperty(propKey));
+    return {
+      ok: true,
+      projectId: projectId,
+      maxDevices: MAX_DEVICES,
+      usedSlots: existingList.length,
+      ownerDeviceIds: existingList,
+      ownerDeviceId: existingList.join(' | '),
+      status: existingList.length >= MAX_DEVICES ? 'LOCKED_2_OF_2' : (existingList.length === 1 ? 'LOCKED_1_OF_2' : 'UNCLAIMED_0_OF_2')
+    };
+  }
+
+  if (action === 'reset') {
+    props.deleteProperty(propKey);
+    if (rowIdx > 0) {
+      sheet.getRange(rowIdx, 3).setValue('');
+      sheet.getRange(rowIdx, 4).setValue('DIRESET (0/2 · SIAP KLAIM HP BARU)');
+      sheet.getRange(rowIdx, 6).setValue(nowStr);
+      sheet.getRange(rowIdx, 8).setValue('Direset penuh pada ' + nowStr);
+    }
+    return { ok: true, status: 'RESET_SUCCESS', projectId: projectId, maxDevices: MAX_DEVICES, usedSlots: 0, ownerDeviceIds: [] };
+  }
+
+  if (!deviceId) {
+    return { ok: false, reason: 'MISSING_DEVICE_ID' };
+  }
+
+  // Baca daftar perangkat dari Kolom C Sheet terlebih dahulu:
+  // Jika Admin menghapus sel Kolom C (atau menghapus salah satu ID-HP di Kolom C), ScriptProperties otomatis mengikuti isi Sheet!
+  var ownersInSheet = [];
+  var statusInSheet = '';
+  if (rowIdx > 0) {
+    ownersInSheet = parseDeviceList_(sheet.getRange(rowIdx, 3).getValue());
+    statusInSheet = String(sheet.getRange(rowIdx, 4).getValue() || '').trim().toUpperCase();
+    if (!ownersInSheet.length || statusInSheet.indexOf('RESET') !== -1) {
+      props.deleteProperty(propKey);
+      ownersInSheet = [];
+    } else {
+      props.setProperty(propKey, ownersInSheet.join(' | '));
+    }
+  }
+
+  var existingOwners = rowIdx > 0 ? ownersInSheet : parseDeviceList_(props.getProperty(propKey));
+
+  // KASUS 1: Perangkat Ini SUDAH Terdaftar di Slot 1/2 atau Slot 2/2 -> Izinkan & Update Waktu Verifikasi!
+  var existingIdx = existingOwners.indexOf(deviceId);
+  if (existingIdx !== -1) {
+    var joinedExisting = existingOwners.join(' | ');
+    props.setProperty(propKey, joinedExisting);
+    var statusLabel = existingOwners.length >= MAX_DEVICES
+      ? 'TERKUNCI PENUH (2/2)'
+      : 'TERKUNCI (' + existingOwners.length + '/' + MAX_DEVICES + ')';
+    if (rowIdx > 0) {
+      if (customerName && !sheet.getRange(rowIdx, 2).getValue()) {
+        sheet.getRange(rowIdx, 2).setValue(customerName);
+      }
+      sheet.getRange(rowIdx, 3).setValue(joinedExisting);
+      sheet.getRange(rowIdx, 4).setValue(statusLabel);
+      sheet.getRange(rowIdx, 6).setValue(nowStr);
+    } else {
+      sheet.appendRow([
+        projectId,
+        customerName || ('Customer ' + projectId),
+        joinedExisting,
+        statusLabel,
+        nowStr,
+        nowStr,
+        0,
+        'Verifikasi Ulang HP ke-' + (existingIdx + 1)
+      ]);
+    }
+    SpreadsheetApp.flush();
+    return {
+      ok: true,
+      status: 'VERIFIED_OWNER_DEVICE',
+      slot: existingIdx + 1,
+      maxDevices: MAX_DEVICES,
+      usedSlots: existingOwners.length,
+      projectId: projectId,
+      ownerDeviceIds: existingOwners,
+      ownerDeviceId: joinedExisting
+    };
+  }
+
+  // KASUS 2: Slot Masih Tersedia (< 2 Perangkat, yaitu Slot 1/2 atau Slot 2/2) -> Daftarkan Perangkat Ini!
+  if (existingOwners.length < MAX_DEVICES) {
+    existingOwners.push(deviceId);
+    var joinedNew = existingOwners.join(' | ');
+    props.setProperty(propKey, joinedNew);
+    var newStatusLabel = existingOwners.length >= MAX_DEVICES
+      ? 'TERKUNCI PENUH (2/2)'
+      : 'TERKUNCI (1/2)';
+    var claimNote = existingOwners.length === 1
+      ? 'Klaim Slot 1/2 (HP ke-1 Aktif)'
+      : 'Klaim Slot 2/2 (HP ke-1 & ke-2 Aktif)';
+    if (rowIdx > 0) {
+      if (customerName) sheet.getRange(rowIdx, 2).setValue(customerName);
+      sheet.getRange(rowIdx, 3).setValue(joinedNew);
+      sheet.getRange(rowIdx, 4).setValue(newStatusLabel);
+      if (!sheet.getRange(rowIdx, 5).getValue()) sheet.getRange(rowIdx, 5).setValue(nowStr);
+      sheet.getRange(rowIdx, 6).setValue(nowStr);
+      sheet.getRange(rowIdx, 8).setValue(claimNote);
+    } else {
+      sheet.appendRow([
+        projectId,
+        customerName || ('Customer ' + projectId),
+        joinedNew,
+        newStatusLabel,
+        nowStr,
+        nowStr,
+        0,
+        claimNote
+      ]);
+    }
+    SpreadsheetApp.flush();
+    return {
+      ok: true,
+      status: existingOwners.length === 1 ? 'CLAIMED_SLOT_1_OF_2' : 'CLAIMED_SLOT_2_OF_2',
+      slot: existingOwners.length,
+      maxDevices: MAX_DEVICES,
+      usedSlots: existingOwners.length,
+      projectId: projectId,
+      ownerDeviceIds: existingOwners,
+      ownerDeviceId: joinedNew
+    };
+  }
+
+  // KASUS 3: Kuota 2 Perangkat (2/2) SUDAH PENUH & Ini Adalah Perangkat ke-3+ -> TOLAK!
+  var fullOwnersStr = existingOwners.join(' | ');
+  if (rowIdx > 0) {
+    var prevBlocked = Number(sheet.getRange(rowIdx, 7).getValue() || 0) || 0;
+    sheet.getRange(rowIdx, 7).setValue(prevBlocked + 1);
+    sheet.getRange(rowIdx, 8).setValue('HP ke-3+ Ditolak (' + deviceId + ') pada ' + nowStr);
+  } else {
+    sheet.appendRow([
+      projectId,
+      customerName || ('Customer ' + projectId),
+      fullOwnersStr,
+      'TERKUNCI PENUH (2/2)',
+      nowStr,
+      nowStr,
+      1,
+      'HP ke-3+ Ditolak (' + deviceId + ') pada ' + nowStr
+    ]);
+  }
+  SpreadsheetApp.flush();
+  return {
+    ok: false,
+    status: 'REJECTED_MAX_2_DEVICES',
+    maxDevices: MAX_DEVICES,
+    usedSlots: existingOwners.length,
+    projectId: projectId,
+    ownerDeviceIds: existingOwners,
+    ownerDeviceId: fullOwnersStr
+  };
+}
+
+function doGet(e) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var params = (e && e.parameter) ? e.parameter : {};
+    if (params.deviceId || params.action) {
+      var res = handleLockAction_({
+        action: params.action || 'claim_or_verify',
+        projectId: params.projectId || 'wypha',
+        customerName: params.customerName || '',
+        deviceId: params.deviceId || '',
+        code: params.code || '',
+        pin: params.pin || ''
+      });
+      return ContentService.createTextOutput(JSON.stringify(res))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    setupSheet();
+    return ContentService.createTextOutput(JSON.stringify({
+      ok: true,
+      service: 'WYPHA Max 2-Device Lock Google Sheets Server V21',
+      maxDevices: MAX_DEVICES,
+      sheetName: SHEET_NAME,
+      message: 'Server Aktif (Maksimal 2 Perangkat per Project ID) & Terhubung ke Google Sheets!'
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      ok: false,
+      error: String(err && err.message ? err.message : err)
+    })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var raw = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
+    var data = {};
+    try {
+      data = JSON.parse(raw);
+    } catch (parseErr) {
+      data = (e && e.parameter) ? e.parameter : {};
+    }
+    var res = handleLockAction_(data);
+    return ContentService.createTextOutput(JSON.stringify(res))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      ok: false,
+      error: String(err && err.message ? err.message : err)
+    })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function resetSelectedRowLock() {
+  var sheet = getTargetSheet_();
+  var range = sheet.getActiveRange();
+  if (!range || range.getRow() < 2) {
+    SpreadsheetApp.getUi().alert('Pilih salah satu baris data Customer (baris ke-2 atau lebih) terlebih dahulu.');
+    return;
+  }
+  var row = range.getRow();
+  var projId = String(sheet.getRange(row, 1).getValue() || '').trim();
+  var custName = String(sheet.getRange(row, 2).getValue() || '').trim();
+  if (!projId) {
+    SpreadsheetApp.getUi().alert('Baris yang dipilih tidak memiliki Project ID di Kolom A.');
+    return;
+  }
+  handleLockAction_({ action: 'reset', projectId: projId });
+  SpreadsheetApp.getUi().alert('✓ Kunci perangkat untuk "' + (custName || projId) + '" berhasil di-reset ke 0/2! Sekarang 2 perangkat baru dapat mengklaim kunci.');
+}
+
+function removeSecondDeviceOnSelectedRow() {
+  var sheet = getTargetSheet_();
+  var range = sheet.getActiveRange();
+  if (!range || range.getRow() < 2) {
+    SpreadsheetApp.getUi().alert('Pilih salah satu baris data Customer (baris ke-2 atau lebih) terlebih dahulu.');
+    return;
+  }
+  var row = range.getRow();
+  var projId = String(sheet.getRange(row, 1).getValue() || '').trim();
+  var custName = String(sheet.getRange(row, 2).getValue() || '').trim();
+  var owners = parseDeviceList_(sheet.getRange(row, 3).getValue());
+  if (owners.length < 2) {
+    SpreadsheetApp.getUi().alert('Baris ini baru memiliki ' + owners.length + ' perangkat terdaftar.');
+    return;
+  }
+  var firstOnly = owners[0];
+  var nowStr = formatWibNow_();
+  PropertiesService.getScriptProperties().setProperty('WYPHA_LOCK_' + projId, firstOnly);
+  sheet.getRange(row, 3).setValue(firstOnly);
+  sheet.getRange(row, 4).setValue('TERKUNCI (1/2)');
+  sheet.getRange(row, 6).setValue(nowStr);
+  sheet.getRange(row, 8).setValue('HP ke-2 dihapus pada ' + nowStr + ' (Sisa Slot 1/2)');
+  SpreadsheetApp.flush();
+  SpreadsheetApp.getUi().alert('✓ HP ke-2 untuk "' + (custName || projId) + '" berhasil dihapus! HP ke-1 (' + firstOnly + ') tetap aktif (1/2) dan Slot 2/2 kini kosong.');
+}
+
+function resetAllDeviceLocks() {
+  var ui = SpreadsheetApp.getUi();
+  var resp = ui.alert('Reset Semua Kunci?', 'Apakah Anda yakin ingin mereset semua kunci perangkat di tabel ini?', ui.ButtonSet.YES_NO);
+  if (resp !== ui.Button.YES) return;
+  PropertiesService.getScriptProperties().deleteAllProperties();
+  var sheet = getTargetSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    sheet.getRange(2, 1, lastRow - 1, 8).clearContent();
+  }
+  ui.alert('✓ Seluruh data kunci perangkat telah dibersihkan.');
+}

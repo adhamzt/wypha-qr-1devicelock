@@ -842,17 +842,28 @@ body.has-theme-image .ending{background:linear-gradient(180deg,color-mix(in srgb
         const prodOwnerCertKey = 'wypha-v201-prod-owner-cert:' + prodType;
         const rawCert = (window.localStorage && (window.localStorage.getItem(ownerCertKey) || window.localStorage.getItem(prodOwnerCertKey))) || (window.sessionStorage && window.sessionStorage.getItem(ownerCertKey));
         const rawAllowed = String(clCfg.allowedDeviceId || '').trim().toUpperCase();
-        let boundId = /^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/.test(rawAllowed) ? rawAllowed : '';
+        const parseHwIds = rawStr => String(rawStr || '').split(/[,|;\s]+/).map(x => x.trim().toUpperCase()).filter(x => /^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/.test(x)).slice(0, 2);
+        let boundIds = parseHwIds(rawAllowed);
         if (rawCert) {
           const pCert = JSON.parse(rawCert);
-          if (pCert?.boundOwnerDeviceId) boundId = String(pCert.boundOwnerDeviceId).trim().toUpperCase();
+          if (Array.isArray(pCert?.boundOwnerDeviceIds)) {
+            const fromArr = pCert.boundOwnerDeviceIds.map(x => String(x || '').trim().toUpperCase()).filter(x => /^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/.test(x));
+            for (const id of fromArr) {
+              if (boundIds.length < 2 && !boundIds.includes(id)) boundIds.push(id);
+            }
+          }
+          if (pCert?.boundOwnerDeviceId) {
+            for (const id of parseHwIds(pCert.boundOwnerDeviceId)) {
+              if (boundIds.length < 2 && !boundIds.includes(id)) boundIds.push(id);
+            }
+          }
         }
-        if (physDevId && boundId && boundId === physDevId) {
+        if (physDevId && boundIds.includes(physDevId)) {
           isThisPhoneOwner = true;
         }
         if (clCfg.sessionMode !== 'always_locked' && isThisPhoneOwner) {
           const studioPinCfg = String(clCfg.pin || '1234').trim();
-          const effProjId = (!(/^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/i.test(rawAllowed)) && rawAllowed) ? rawAllowed : projId;
+          const effProjId = (!boundIds.length && rawAllowed) ? rawAllowed : projId;
           const pinKey = 'wypha-v21-pin-state:' + effProjId + ':' + encodeURIComponent(studioPinCfg);
           const rawPin =
             (window.localStorage && window.localStorage.getItem(pinKey)) ||
@@ -12638,12 +12649,21 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     },
     C?.customerLock || {}
   );
+  const MAX_ALLOWED_DEVICES = 2;
   const rawCfgAllowed = String(cfg.allowedDeviceId || '').trim();
   const isValidHwDeviceId = id => /^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/i.test(String(id || '').trim());
-  const lockedHardwareDeviceId = isValidHwDeviceId(rawCfgAllowed) ? rawCfgAllowed.toUpperCase() : '';
-  const customProjectLabel = (!lockedHardwareDeviceId && rawCfgAllowed) ? rawCfgAllowed : '';
+  const parseHwDeviceList = raw =>
+    String(raw || '')
+      .split(/[,|;\s]+/)
+      .map(s => s.trim().toUpperCase())
+      .filter(isValidHwDeviceId)
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .slice(0, MAX_ALLOWED_DEVICES);
+
+  const lockedHardwareDeviceIds = parseHwDeviceList(rawCfgAllowed);
+  const customProjectLabel = (!lockedHardwareDeviceIds.length && rawCfgAllowed) ? rawCfgAllowed : '';
   const projId = String(customProjectLabel || C?.projectId || C?.product || 'wypha');
-  const customerName = String(C?.personName || C?.customerName || customProjectLabel || 'WYPHA JUNIOR').trim();
+  const customerName = String(C?.personName || C?.customerName || customProjectLabel || '').trim();
   const prodType = String(C?.product || 'wypha');
   const studioPinConfigured = String(cfg.pin || '1234').trim();
   const pinStateKey = 'wypha-v21-pin-state:' + projId + ':' + encodeURIComponent(studioPinConfigured);
@@ -12679,8 +12699,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     } catch (e) {}
   };
 
-  // Every physical phone/browser gets a unique, non-clonable Device ID (Hardware Traits + Persistent Cryptographic Instance Token)
-  // Even two identical phone models will NEVER share the same Device ID!
   const getOrCreateUniquePhysicalDeviceId = () => {
     try {
       const scr = `${window.screen?.width || 0}x${window.screen?.height || 0}x${window.screen?.colorDepth || 24}@${Math.round((window.devicePixelRatio || 1) * 100)}`;
@@ -12717,7 +12735,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
 
   const realPhysicalDeviceId = getOrCreateUniquePhysicalDeviceId();
 
-  // Cryptographic License Code Calculator: Binds 1 Code + 1 PIN mathematically to 1 specific Device ID!
+  // Cryptographic License Code Calculator: Binds Code + PIN mathematically to a specific Device ID!
   const computeLicenseCodeForDevice = (deviceId, pinStr) => {
     const cleanDev = String(deviceId || '').trim().toUpperCase();
     const cleanPin = String(pinStr || '1234').trim();
@@ -12742,7 +12760,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
 
   const getConfiguredMasterPin = () => String(cfg.masterPin ?? '').trim();
 
-  // Purge any legacy shared PIN keys so old PINs (e.g. 1986) from previous exports never overwrite the new Studio PIN!
+  // Purge any legacy shared PIN keys so old PINs from previous exports never overwrite the new Studio PIN
   try {
     const legacyKey1 = 'wypha-v14-pin-state:' + projId;
     const legacyKey2 = 'wypha-v144-prod:wypha-v14-pin-state:' + prodType;
@@ -12752,8 +12770,22 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     sessionStorage.removeItem(legacyKey2);
   } catch (e) {}
 
+  const mergeDeviceIdLists = (...lists) => {
+    const out = [];
+    for (const lst of lists) {
+      const arr = Array.isArray(lst) ? lst : parseHwDeviceList(lst);
+      for (const item of arr) {
+        const clean = String(item || '').trim().toUpperCase();
+        if (isValidHwDeviceId(clean) && !out.includes(clean) && out.length < MAX_ALLOWED_DEVICES) {
+          out.push(clean);
+        }
+      }
+    }
+    return out;
+  };
+
   const loadOwnerDeviceCert = () => {
-    let boundOwnerDeviceId = lockedHardwareDeviceId;
+    let boundOwnerDeviceIds = [...lockedHardwareDeviceIds];
     try {
       const raw =
         localStorage.getItem(ownerCertKey) ||
@@ -12762,23 +12794,32 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          if (typeof parsed.boundOwnerDeviceId === 'string' && isValidHwDeviceId(parsed.boundOwnerDeviceId)) {
-            boundOwnerDeviceId = parsed.boundOwnerDeviceId.trim().toUpperCase();
-          }
+          boundOwnerDeviceIds = mergeDeviceIdLists(
+            boundOwnerDeviceIds,
+            parsed.boundOwnerDeviceIds,
+            parsed.boundOwnerDeviceId
+          );
         }
       }
     } catch (e) {}
-    if (!boundOwnerDeviceId) {
+    if (!boundOwnerDeviceIds.length) {
       const ckOwner = readCookieVal(ownerCookieName);
-      if (ckOwner && isValidHwDeviceId(ckOwner)) boundOwnerDeviceId = ckOwner.toUpperCase();
+      if (ckOwner) {
+        boundOwnerDeviceIds = mergeDeviceIdLists(boundOwnerDeviceIds, ckOwner);
+      }
     }
-    return { boundOwnerDeviceId };
+    return {
+      boundOwnerDeviceIds,
+      boundOwnerDeviceId: boundOwnerDeviceIds[0] || ''
+    };
   };
 
-  const saveOwnerDeviceCert = (boundDevId) => {
-    const cleanBoundId = String(boundDevId || '').trim().toUpperCase();
+  const saveOwnerDeviceCert = (boundDevIdsInput) => {
+    const cleanList = mergeDeviceIdLists(lockedHardwareDeviceIds, boundDevIdsInput);
+    const joined = cleanList.join(' | ');
     const payload = {
-      boundOwnerDeviceId: cleanBoundId,
+      boundOwnerDeviceIds: cleanList,
+      boundOwnerDeviceId: cleanList[0] || '',
       updatedAt: Date.now()
     };
     const str = JSON.stringify(payload);
@@ -12786,7 +12827,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     try { localStorage.setItem(ownerCertKey, str); } catch (e) {}
     try { localStorage.setItem(prodOwnerCertKey, str); } catch (e) {}
     try { window.__wyphaMasterVault?.put?.(ownerCertKey, payload); } catch (e) {}
-    writeCookieVal(ownerCookieName, cleanBoundId || '');
+    writeCookieVal(ownerCookieName, joined);
   };
 
   // Check if URL contains one-time Owner Activation Token (?wypha_owner=KHP-xxxx) matching THIS physical phone's Device ID
@@ -12797,7 +12838,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       if (m && m[1]) {
         const token = decodeURIComponent(m[1]).trim().toUpperCase();
         const expectedForThisPhone = computeLicenseCodeForDevice(realPhysicalDeviceId, pinStr).toUpperCase();
-        const master = getConfiguredMasterPin().toUpperCase();
+        const expectedStudioForThisPhone = computeLicenseCodeForDevice(realPhysicalDeviceId, studioPinConfigured).toUpperCase();
         try {
           const cleanHref = href
             .replace(/([?&])(?:wypha_owner|wypha_bind|owner_key)=[^&#]+&?/gi, '$1')
@@ -12807,7 +12848,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
             window.history.replaceState(null, document.title, cleanHref);
           }
         } catch (e2) {}
-        if (token === expectedForThisPhone || (master && token === master)) {
+        if (token === expectedForThisPhone || token === expectedStudioForThisPhone) {
           return true;
         }
       }
@@ -12821,7 +12862,8 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       unlocked: false,
       customPin: '',
       unlockedBy: '',
-      boundOwnerDeviceId: cert.boundOwnerDeviceId
+      boundOwnerDeviceIds: cert.boundOwnerDeviceIds,
+      boundOwnerDeviceId: cert.boundOwnerDeviceIds[0] || ''
     };
     try {
       const raw =
@@ -12830,7 +12872,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          // Only accept customPin if it was explicitly saved by the customer under THIS exact studioPinConfigured!
           if (
             parsed.studioPin === studioPinConfigured &&
             typeof parsed.customPin === 'string' &&
@@ -12838,11 +12879,17 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
           ) {
             out.customPin = parsed.customPin.trim();
           }
-          if (!out.boundOwnerDeviceId && parsed.unlocked === true) {
-            out.boundOwnerDeviceId = realPhysicalDeviceId;
-            saveOwnerDeviceCert(realPhysicalDeviceId);
+          out.boundOwnerDeviceIds = mergeDeviceIdLists(
+            out.boundOwnerDeviceIds,
+            parsed.boundOwnerDeviceIds,
+            parsed.boundOwnerDeviceId
+          );
+          if (out.boundOwnerDeviceIds.length < MAX_ALLOWED_DEVICES && parsed.unlocked === true && !out.boundOwnerDeviceIds.includes(realPhysicalDeviceId)) {
+            out.boundOwnerDeviceIds = mergeDeviceIdLists(out.boundOwnerDeviceIds, [realPhysicalDeviceId]);
+            saveOwnerDeviceCert(out.boundOwnerDeviceIds);
           }
-          const isThisPhoneOwner = !cfg.singleDeviceLock || (out.boundOwnerDeviceId && out.boundOwnerDeviceId === realPhysicalDeviceId);
+          out.boundOwnerDeviceId = out.boundOwnerDeviceIds[0] || '';
+          const isThisPhoneOwner = !cfg.singleDeviceLock || out.boundOwnerDeviceIds.includes(realPhysicalDeviceId);
           if (cfg.sessionMode !== 'always_locked' && parsed.unlocked === true && isThisPhoneOwner) {
             out.unlocked = true;
             out.unlockedBy = parsed.unlockedBy || 'customer';
@@ -12852,12 +12899,13 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     } catch (e) {}
     const activePin = (out.customPin && out.customPin.trim()) ? out.customPin.trim() : studioPinConfigured;
     if (checkAndConsumeUrlOwnerToken(activePin)) {
-      if (!out.boundOwnerDeviceId || out.boundOwnerDeviceId === realPhysicalDeviceId) {
-        out.boundOwnerDeviceId = realPhysicalDeviceId;
-        saveOwnerDeviceCert(realPhysicalDeviceId);
+      if (out.boundOwnerDeviceIds.includes(realPhysicalDeviceId) || out.boundOwnerDeviceIds.length < MAX_ALLOWED_DEVICES) {
+        out.boundOwnerDeviceIds = mergeDeviceIdLists(out.boundOwnerDeviceIds, [realPhysicalDeviceId]);
+        out.boundOwnerDeviceId = out.boundOwnerDeviceIds[0] || '';
+        saveOwnerDeviceCert(out.boundOwnerDeviceIds);
       }
     }
-    const isThisPhoneOwnerNow = !cfg.singleDeviceLock || (out.boundOwnerDeviceId && out.boundOwnerDeviceId === realPhysicalDeviceId);
+    const isThisPhoneOwnerNow = !cfg.singleDeviceLock || out.boundOwnerDeviceIds.includes(realPhysicalDeviceId);
     if (!out.unlocked && cfg.sessionMode !== 'always_locked' && readCookieUnlocked() && isThisPhoneOwnerNow) {
       out.unlocked = true;
       out.unlockedBy = 'customer';
@@ -12873,11 +12921,13 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
 
   const getCurrentActiveDeviceId = () => realPhysicalDeviceId;
 
-  // Is the current device the 1 and only Bound Customer Phone?
+  // Is the current device one of the registered Customer Phones (Max 2 Devices)?
   const isEffectiveOwnerDevice = () => {
     if (cfg.singleDeviceLock === false) return true;
-    if (lockedHardwareDeviceId && lockedHardwareDeviceId !== realPhysicalDeviceId) return false;
-    return !!state.boundOwnerDeviceId && state.boundOwnerDeviceId === realPhysicalDeviceId;
+    if (lockedHardwareDeviceIds.length >= MAX_ALLOWED_DEVICES && !lockedHardwareDeviceIds.includes(realPhysicalDeviceId)) {
+      return false;
+    }
+    return Array.isArray(state.boundOwnerDeviceIds) && state.boundOwnerDeviceIds.includes(realPhysicalDeviceId);
   };
 
   const getActiveCustomerPin = () => {
@@ -12885,18 +12935,29 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
   };
 
   const getCustomerBoundLicenseCode = () => {
-    const ownerId = state.boundOwnerDeviceId || lockedHardwareDeviceId || realPhysicalDeviceId;
-    return computeLicenseCodeForDevice(ownerId, studioPinConfigured);
+    return computeLicenseCodeForDevice(realPhysicalDeviceId, studioPinConfigured);
+  };
+
+  const registerCurrentDeviceInSlot = (cloudOwners = null) => {
+    if (Array.isArray(cloudOwners) && cloudOwners.length) {
+      state.boundOwnerDeviceIds = mergeDeviceIdLists(cloudOwners, [realPhysicalDeviceId]);
+    } else if (typeof cloudOwners === 'string' && cloudOwners.trim()) {
+      state.boundOwnerDeviceIds = mergeDeviceIdLists(cloudOwners, [realPhysicalDeviceId]);
+    } else {
+      state.boundOwnerDeviceIds = mergeDeviceIdLists(state.boundOwnerDeviceIds, [realPhysicalDeviceId]);
+    }
+    state.boundOwnerDeviceId = state.boundOwnerDeviceIds[0] || realPhysicalDeviceId;
   };
 
   const savePinState = () => {
-    saveOwnerDeviceCert(state.boundOwnerDeviceId);
+    saveOwnerDeviceCert(state.boundOwnerDeviceIds);
     const payload = {
       unlocked: !!state.unlocked,
       studioPin: studioPinConfigured,
       customPin: state.customPin || '',
       unlockedBy: state.unlockedBy || '',
-      boundOwnerDeviceId: state.boundOwnerDeviceId || '',
+      boundOwnerDeviceIds: state.boundOwnerDeviceIds || [],
+      boundOwnerDeviceId: (state.boundOwnerDeviceIds && state.boundOwnerDeviceIds[0]) || state.boundOwnerDeviceId || '',
       updatedAt: Date.now()
     };
     const str = JSON.stringify(payload);
@@ -12910,7 +12971,8 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
         unlocked: false,
         studioPin: studioPinConfigured,
         customPin: state.customPin || '',
-        boundOwnerDeviceId: state.boundOwnerDeviceId || '',
+        boundOwnerDeviceIds: state.boundOwnerDeviceIds || [],
+        boundOwnerDeviceId: (state.boundOwnerDeviceIds && state.boundOwnerDeviceIds[0]) || state.boundOwnerDeviceId || '',
         updatedAt: Date.now()
       });
       try { localStorage.setItem(pinStateKey, pinOnly); } catch (e) {}
@@ -12919,7 +12981,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     }
   };
 
-  // Cloud 1-Device Lock Verification (Supports Google Apps Script & Cloudflare /api/device-lock without CORS Preflight Failure!)
+  // Cloud 2-Device Lock Verification (Supports Google Apps Script & Cloudflare /api/device-lock without CORS Preflight Failure!)
   const verifyCloudSingleDeviceClaim = async (deviceId, codeVal, pinVal) => {
     const endpoint = String(cfg.cloudLockUrl || '').trim();
     if (!endpoint) return { ok: true, localOnly: true };
@@ -12928,6 +12990,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       projectId: projId,
       customerName: customerName || projId,
       deviceId,
+      maxDevices: MAX_ALLOWED_DEVICES,
       code: codeVal,
       pin: pinVal
     };
@@ -12956,7 +13019,10 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     return { ok: true, fallback: true };
   };
 
-  // CORE 1-DEVICE VERIFICATION:
+  // CORE 2-DEVICE + DUAL/BACKUP PIN (MASTER PIN) VERIFICATION:
+  // - Supports up to 2 devices (Slot 1/2 and Slot 2/2). Device #3 and above are REJECTED!
+  // - Master PIN acts strictly as a Dual/Backup Key ("Kunci Ganda") if the user forgets the Primary PIN,
+  //   and is strictly bound to the exact same 2-Device Slot limit (never bypasses full slots!).
   const checkPinMatch = (rawPinInput, rawCodeInput = '') => {
     const val = String(rawPinInput || '').trim();
     const codeVal = String(rawCodeInput || '').trim().toUpperCase();
@@ -12967,51 +13033,70 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     const activeDevId = getCurrentActiveDeviceId();
     const expectedCodeForActiveDev = computeLicenseCodeForDevice(activeDevId, custPin).toUpperCase();
     const expectedStudioCodeForActiveDev = computeLicenseCodeForDevice(activeDevId, studioPinConfigured).toUpperCase();
-    const ownerDevId = state.boundOwnerDeviceId || lockedHardwareDeviceId;
-    const ownerLicenseCode = ownerDevId ? computeLicenseCodeForDevice(ownerDevId, custPin).toUpperCase() : '';
+    const expectedMasterCodeForActiveDev = masterPin ? computeLicenseCodeForDevice(activeDevId, masterPin).toUpperCase() : '';
 
-    // 1. Master Admin Recovery Key — strictly checks ONLY the configured Master PIN from Studio!
-    if (masterPin && val.toUpperCase() === masterPin.toUpperCase()) {
-      return { status: 'master' };
-    }
+    // 1. Check if entered PIN matches EITHER Primary PIN OR Master PIN (Kunci Ganda / Backup PIN)
+    const isPrimaryPinMatch = (val === custPin) || (val === studioPinConfigured);
+    const isBackupMasterPinMatch = !!(masterPin && val.toUpperCase() === masterPin.toUpperCase());
 
-    // 2. Check if PIN matches Customer PIN (either active customPin or Studio-configured PIN)
-    const isPinValid = (val === custPin) || (val === studioPinConfigured);
-    if (!isPinValid) {
+    if (!isPrimaryPinMatch && !isBackupMasterPinMatch) {
       return { status: 'wrong_pin' };
     }
 
-    // 3. Single-Device Lock Check:
+    const usedBackupPin = !isPrimaryPinMatch && isBackupMasterPinMatch;
+
+    // 2. Maximum 2-Device Lock Check (Applies to BOTH Primary PIN AND Master PIN / Kunci Ganda!):
     if (cfg.singleDeviceLock !== false) {
-      // CASE A: Slot 1/1 is ALREADY bound to the Customer's Phone (ownerDevId), and THIS device is a DIFFERENT phone!
-      if (ownerDevId && ownerDevId !== activeDevId) {
+      const registeredDevs = mergeDeviceIdLists(lockedHardwareDeviceIds, state.boundOwnerDeviceIds);
+
+      // CASE A: This phone IS already one of the registered Owner Phones (Slot 1/2 or Slot 2/2)
+      if (registeredDevs.includes(activeDevId)) {
         return {
-          status: 'blocked_second_device',
-          ownerDevId,
-          activeDevId,
-          enteredSameCode: !!(codeVal && (codeVal === ownerLicenseCode || codeVal === String(cfg.deviceBindCode || '').toUpperCase() || codeVal === 'WYPHA-HP1'))
+          status: 'customer',
+          usedBackupPin,
+          slotIndex: registeredDevs.indexOf(activeDevId) + 1,
+          usedSlots: registeredDevs.length
         };
       }
 
-      // CASE B: This phone IS already the Bound Owner Phone (ownerDevId === activeDevId)
-      if (ownerDevId && ownerDevId === activeDevId) {
-        return { status: 'customer' };
+      // CASE B: Both slots (2/2) are ALREADY full on other devices, and THIS device is Device #3+!
+      if (registeredDevs.length >= MAX_ALLOWED_DEVICES) {
+        return {
+          status: 'blocked_max_devices',
+          ownerDevIds: registeredDevs,
+          ownerDevId: registeredDevs.join(' | '),
+          activeDevId
+        };
       }
 
-      // CASE C: Slot 1/1 is not yet bound on this browser.
-      if (!codeVal || codeVal === expectedCodeForActiveDev || codeVal === expectedStudioCodeForActiveDev || codeVal === 'KHP-AUTO' || (customProjectLabel && codeVal === customProjectLabel.toUpperCase())) {
-        return { status: 'customer_bound_now', boundDevId: activeDevId };
+      // CASE C: Slot 1/2 or Slot 2/2 is available for this phone.
+      const isCodeValidForThisPhone =
+        !codeVal ||
+        codeVal === expectedCodeForActiveDev ||
+        codeVal === expectedStudioCodeForActiveDev ||
+        (expectedMasterCodeForActiveDev && codeVal === expectedMasterCodeForActiveDev) ||
+        codeVal === 'KHP-AUTO' ||
+        (customProjectLabel && codeVal === customProjectLabel.toUpperCase());
+
+      if (isCodeValidForThisPhone) {
+        return {
+          status: 'customer_bound_now',
+          boundDevId: activeDevId,
+          usedBackupPin,
+          slotIndex: registeredDevs.length + 1,
+          usedSlots: registeredDevs.length + 1
+        };
       }
 
       return {
         status: 'blocked_unregistered_device',
         activeDevId,
-        expectedCodeForActiveDev,
+        expectedCodeForActiveDev: expectedStudioCodeForActiveDev,
         enteredWrongCode: true
       };
     }
 
-    return { status: 'customer' };
+    return { status: 'customer', usedBackupPin };
   };
 
   const applyDomLockClasses = () => {
@@ -13102,8 +13187,8 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       const chip = document.createElement('div');
       chip.className = 'v14-visitor-readonly-chip';
       chip.textContent = t(
-        '🔒 Mode Lihat Pengunjung — Fasilitas tambah/edit diary, foto, tema, perpustakaan & game hanya berlaku pada 1 Perangkat Utama Customer.',
-        '🔒 Visitor View Mode — Add/edit diary, photo, theme, library & game facilities only work on the 1 Primary Customer Device.'
+        '🔒 Mode Lihat Pengunjung — Fasilitas tambah/edit diary, foto, tema, perpustakaan & game hanya berlaku pada Maksimal 2 Perangkat Customer.',
+        '🔒 Visitor View Mode — Add/edit diary, photo, theme, library & game facilities only work on up to 2 Customer Devices.'
       );
       chip.onclick = () => openPinModal();
       diaryJournal.prepend(chip);
@@ -13113,8 +13198,8 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       const chip = document.createElement('div');
       chip.className = 'v14-visitor-readonly-chip';
       chip.textContent = t(
-        '🔒 Mode Lihat Pengunjung — Ketuk tanggal bertanda untuk membaca catatan. Fasilitas tambah/edit dikunci hanya pada 1 HP Utama Customer.',
-        '🔒 Visitor View Mode — Tap marked dates to read notes. Add/edit facilities are locked to the 1 Primary Customer Phone.'
+        '🔒 Mode Lihat Pengunjung — Ketuk tanggal bertanda untuk membaca catatan. Fasilitas tambah/edit dikunci pada Maksimal 2 HP Customer.',
+        '🔒 Visitor View Mode — Tap marked dates to read notes. Add/edit facilities are locked to up to 2 Customer Phones.'
       );
       chip.onclick = () => openPinModal();
       babyPanel.appendChild(chip);
@@ -13138,42 +13223,46 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       const isOwnerDev = isEffectiveOwnerDevice();
       const activeDevId = getCurrentActiveDeviceId();
       const curCustPin = getActiveCustomerPin();
-      const ownerDevId = state.boundOwnerDeviceId || lockedHardwareDeviceId;
-      const customerValidCode = computeLicenseCodeForDevice(ownerDevId || realPhysicalDeviceId, curCustPin);
+      const registeredDevs = mergeDeviceIdLists(lockedHardwareDeviceIds, state.boundOwnerDeviceIds);
+      const isSlotFullForOther = !registeredDevs.includes(activeDevId) && registeredDevs.length >= MAX_ALLOWED_DEVICES;
+      const thisPhoneLicenseCode = computeLicenseCodeForDevice(activeDevId, studioPinConfigured);
+      const slotBadgeText = registeredDevs.includes(activeDevId)
+        ? `${registeredDevs.indexOf(activeDevId) + 1}/${MAX_ALLOWED_DEVICES}`
+        : `${registeredDevs.length}/${MAX_ALLOWED_DEVICES}`;
 
       if (!(state.unlocked && isOwnerDev)) {
         modal.innerHTML =
           '<div class="v14-modal-head">' +
-            '<strong>' + (isOwnerDev ? '🔑 ' + t('VERIFIKASI 1 PERANGKAT CUSTOMER', '1-DEVICE CUSTOMER VERIFICATION') : '🔒 ' + t('AKTIVASI & KUNCI LISENSI 1 PERANGKAT', '1-DEVICE LICENSE ACTIVATION & LOCK')) + '</strong>' +
+            '<strong>' + (isOwnerDev ? '🔑 ' + t('VERIFIKASI PERANGKAT CUSTOMER (MAKS 2 HP)', 'CUSTOMER DEVICE VERIFICATION (MAX 2 PHONES)') : '🔒 ' + t('AKTIVASI KUNCI LISENSI (MAKSIMAL 2 PERANGKAT)', 'LICENSE ACTIVATION (MAX 2 DEVICES)')) + '</strong>' +
             '<button type="button" class="v14-modal-close" data-v14-close aria-label="Tutup">×</button>' +
           '</div>' +
-          '<div style="margin-bottom:10px;padding:10px 12px;border-radius:12px;background:' + (isOwnerDev ? 'rgba(16,185,129,0.14);border:1px solid rgba(52,211,153,0.45);color:#bbf7d0' : 'rgba(14,34,64,0.85);border:1px solid rgba(110,243,255,0.35);color:#dbeafe') + ';font-size:11.5px;line-height:1.45">' +
+          '<div style="margin-bottom:10px;padding:10px 12px;border-radius:12px;background:' + (isOwnerDev ? 'rgba(16,185,129,0.14);border:1px solid rgba(52,211,153,0.45);color:#bbf7d0' : (isSlotFullForOther ? 'rgba(244,63,94,0.16);border:1px solid rgba(251,113,133,0.55);color:#fecdd3' : 'rgba(14,34,64,0.85);border:1px solid rgba(110,243,255,0.35);color:#dbeafe')) + ';font-size:11.5px;line-height:1.45">' +
             (isOwnerDev
-              ? '<strong>📱 ' + t('Status Kuota Perangkat: 1/1 Terikat Resmi ke HP Ini (' + activeDevId + ')', 'Device Slot: 1/1 Officially Bound to This Phone (' + activeDevId + ')') + '</strong><br>' +
+              ? '<strong>📱 ' + t('Status Kuota Perangkat: Slot ' + slotBadgeText + ' Terdaftar di HP Ini (' + activeDevId + ')', 'Device Slot: ' + slotBadgeText + ' Registered to This Phone (' + activeDevId + ')') + '</strong><br>' +
                 t(
-                  'Perangkat ini adalah HP Utama Customer yang sah. Masukkan PIN Anda di bawah untuk membuka Edit Mode, Tambah Foto/Catatan, Ubah Tema, Buka Perpustakaan 3D & 19 Game.',
-                  'This device is the verified Primary Customer Phone. Enter your PIN below to unlock Edit Mode, Add Photo/Notes, Change Theme, 3D Library & 19 Games.'
+                  'Perangkat ini sudah terdaftar resmi. Masukkan PIN Utama atau Master PIN (Kunci Ganda) Anda di bawah untuk masuk ke Edit Mode.',
+                  'This device is officially registered. Enter your Primary PIN or Master PIN (Backup Key) below to enter Edit Mode.'
                 )
-              : (ownerDevId && ownerDevId !== activeDevId
-                  ? '<strong>⛔ ' + t('KUOTA 1 PERANGKAT SUDAH TERKUNCI (ID: ' + ownerDevId + ')', '1-DEVICE QUOTA LOCKED (ID: ' + ownerDevId + ')') + '</strong><br>' +
+              : (isSlotFullForOther
+                  ? '<strong>⛔ ' + t('KUOTA MAKSIMAL 2 PERANGKAT (2/2) SUDAH PENUH! (' + registeredDevs.join(' | ') + ')', 'MAX 2-DEVICE QUOTA (2/2) FULL! (' + registeredDevs.join(' | ') + ')') + '</strong><br>' +
                     t(
-                      'ID Perangkat HP ini adalah <code>' + activeDevId + '</code>. Lisensi microsite ini sudah terikat pada 1 HP Utama Customer sehingga perangkat lain hanya berada dalam Mode Lihat (Read-Only).',
-                      'This device ID is <code>' + activeDevId + '</code>. This microsite license is already bound to the 1 Primary Customer Phone, so other devices are in View-Only Mode.'
+                      'ID Perangkat HP ini adalah <code>' + activeDevId + '</code> (Perangkat ke-3+). Lisensi hanya berlaku untuk maksimal 2 perangkat dan tidak dapat dibuka di perangkat ke-3 kecuali di-reset di Google Sheets.',
+                      'This device ID is <code>' + activeDevId + '</code> (3rd+ Device). The license is limited to a maximum of 2 devices and cannot be unlocked on a 3rd device unless reset in Google Sheets.'
                     )
-                  : '<strong>📱 ' + t('ID Perangkat HP Ini: ' + activeDevId, 'This Phone Device ID: ' + activeDevId) + '</strong><br>' +
+                  : '<strong>📱 ' + t('ID Perangkat HP Ini: ' + activeDevId + ' (Kuota Maksimal 2 Perangkat)', 'This Phone Device ID: ' + activeDevId + ' (Max 2 Devices Quota)') + '</strong><br>' +
                     t(
-                      'Masukkan Kode Kunci 1-Perangkat dan PIN Customer di bawah untuk membuka Edit Mode, Tambah Data, Tema, Perpustakaan 3D & 19 Game di HP ini.',
-                      'Enter your 1-Device License Code and Customer PIN below to unlock Edit Mode, Add Data, Theme, 3D Library & 19 Games on this phone.'
+                      'Masukkan Kode Kunci Perangkat dan PIN Utama (atau Master PIN sebagai Kunci Ganda jika lupa PIN pertama) untuk mengklaim slot perangkat (Maksimal 2 HP).',
+                      'Enter your Device License Code and Primary PIN (or Master PIN as Backup Key if you forgot your first PIN) to claim a device slot (Max 2 Phones).'
                     ))) +
           '</div>' +
           '<form id="v14PinUnlockForm" autocomplete="off">' +
-            '<label style="display:block;font-size:11px;font-weight:700;color:#9ef6ff;margin-bottom:4px">📲 ' + t('1. Kode Kunci 1-Perangkat:', '1. Single-Device License Code:') + '</label>' +
+            '<label style="display:block;font-size:11px;font-weight:700;color:#9ef6ff;margin-bottom:4px">📲 ' + t('1. Kode Kunci Perangkat (Maks 2 HP):', '1. Device License Code (Max 2 Phones):') + '</label>' +
             '<div class="v14-pin-input-wrap" style="margin-top:0;margin-bottom:8px">' +
-              '<input type="text" id="v14DeviceBindInput" class="v14-pin-input" style="font-size:13px;padding:8px 10px;letter-spacing:0.08em" value="' + ((isOwnerDev || !ownerDevId) ? computeLicenseCodeForDevice(activeDevId, curCustPin) : '') + '" placeholder="' + t('Masukkan Kode Kunci Perangkat (KHP-xxxx-xxxx)...', 'Enter Device License Code (KHP-xxxx-xxxx)...') + '" autocomplete="off">' +
+              '<input type="text" id="v14DeviceBindInput" class="v14-pin-input" style="font-size:13px;padding:8px 10px;letter-spacing:0.08em" value="' + (!isSlotFullForOther ? thisPhoneLicenseCode : '') + '" placeholder="' + t('Masukkan Kode Kunci Perangkat (KHP-xxxx-xxxx)...', 'Enter Device License Code (KHP-xxxx-xxxx)...') + '" autocomplete="off">' +
             '</div>' +
-            '<label style="display:block;font-size:11px;font-weight:700;color:#9ef6ff;margin-bottom:4px">🔑 ' + t('2. Kode PIN Customer:', '2. Customer PIN Code:') + '</label>' +
+            '<label style="display:block;font-size:11px;font-weight:700;color:#9ef6ff;margin-bottom:4px">🔑 ' + t('2. Kode PIN Utama / Master PIN (Kunci Ganda):', '2. Primary PIN / Master PIN (Backup Key):') + '</label>' +
             '<div class="v14-pin-input-wrap" style="margin-top:0">' +
-              '<input type="password" id="v14PinInputField" class="v14-pin-input" placeholder="' + t('Ketik PIN Customer...', 'Enter Customer PIN...') + '" autocomplete="off" required>' +
+              '<input type="password" id="v14PinInputField" class="v14-pin-input" placeholder="' + t('Ketik PIN Utama atau Master PIN...', 'Enter Primary PIN or Master PIN...') + '" autocomplete="off" required>' +
               '<button type="button" class="v14-key-btn" data-v14-toggle-vis style="padding:0 12px;font-size:13px" title="Lihat / Sembunyikan PIN">👁</button>' +
             '</div>' +
             '<div class="v14-keypad">' +
@@ -13184,16 +13273,16 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
             '<button type="submit" class="v14-submit-btn">🔓 ' + t('Verifikasi Kode & PIN', 'Verify Code & PIN') + '</button>' +
           '</form>' +
           (flashMsg ? `<div class="v14-status-msg ${flashType === 'ok' ? 'is-ok' : 'is-err'}">${flashMsg}</div>` : '') +
-          (!isOwnerDev && !ownerDevId
+          (!isOwnerDev && !isSlotFullForOther
             ? '<div style="margin-top:10px;padding:9px 11px;border-radius:12px;background:rgba(8,22,48,0.88);border:1px solid rgba(56,189,248,0.4);font-size:11.5px;color:#bae6fd">' +
-                '<strong style="display:block;color:#7dd3fc;margin-bottom:4px">📱 ' + t('Aktivasi Pertama HP Customer (' + activeDevId + '):', 'First-Time Customer Phone Activation (' + activeDevId + '):') + '</strong>' +
+                '<strong style="display:block;color:#7dd3fc;margin-bottom:4px">📱 ' + t('Aktivasi Perangkat Customer (' + activeDevId + ' · Maks 2 HP):', 'Customer Device Activation (' + activeDevId + ' · Max 2 Phones):') + '</strong>' +
                 '<div style="margin-bottom:6px;color:#dbeafe">' +
                   t(
-                    'Kode Kunci Kriptografis khusus untuk ID Perangkat HP ini (<code>' + activeDevId + '</code>): <code style="padding:2px 6px;border-radius:6px;background:rgba(16,185,129,0.2);color:#a7f3d0;font-weight:800">' + computeLicenseCodeForDevice(activeDevId, curCustPin) + '</code>.',
-                    'Cryptographic License Code exclusively for this Phone ID (<code>' + activeDevId + '</code>): <code style="padding:2px 6px;border-radius:6px;background:rgba(16,185,129,0.2);color:#a7f3d0;font-weight:800">' + computeLicenseCodeForDevice(activeDevId, curCustPin) + '</code>.'
+                    'Kode Kunci Kriptografis khusus untuk ID Perangkat HP ini (<code>' + activeDevId + '</code>): <code style="padding:2px 6px;border-radius:6px;background:rgba(16,185,129,0.2);color:#a7f3d0;font-weight:800">' + thisPhoneLicenseCode + '</code>.',
+                    'Cryptographic License Code for this Phone ID (<code>' + activeDevId + '</code>): <code style="padding:2px 6px;border-radius:6px;background:rgba(16,185,129,0.2);color:#a7f3d0;font-weight:800">' + thisPhoneLicenseCode + '</code>.'
                   ) +
                 '</div>' +
-                '<button type="button" class="v14-key-btn" id="v14ClaimFirstDeviceBtn" style="width:100%;padding:7px 10px;font-size:11.5px;background:linear-gradient(135deg,#0284c7,#7c3aed);border-color:#7dd3fc;color:#fff">📲 ' + t('Isi Kode Kunci HP Ini (' + computeLicenseCodeForDevice(activeDevId, curCustPin) + ') untuk Mengikat Slot 1/1', 'Fill This Phone’s License Code to Lock Slot 1/1') + '</button>' +
+                '<button type="button" class="v14-key-btn" id="v14ClaimFirstDeviceBtn" style="width:100%;padding:7px 10px;font-size:11.5px;background:linear-gradient(135deg,#0284c7,#7c3aed);border-color:#7dd3fc;color:#fff">📲 ' + t('Isi Kode Kunci HP Ini (' + thisPhoneLicenseCode + ') untuk Klaim Slot (Maks 2 HP)', 'Fill This Phone’s License Code to Claim Slot (Max 2 Phones)') + '</button>' +
               '</div>'
             : '');
 
@@ -13204,8 +13293,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
         const claimFirstBtn = modal.querySelector('#v14ClaimFirstDeviceBtn');
         if (claimFirstBtn) {
           claimFirstBtn.onclick = () => {
-            if (bindInp) bindInp.value = computeLicenseCodeForDevice(activeDevId, curCustPin);
-            if (inp && !inp.value.trim()) inp.value = curCustPin;
+            if (bindInp) bindInp.value = thisPhoneLicenseCode;
             inp?.focus();
           };
         }
@@ -13231,10 +13319,10 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
           const pinAttempt = (inp?.value || '').trim();
           const res = checkPinMatch(pinAttempt, codeAttempt);
 
-          if (res.status === 'blocked_second_device') {
+          if (res.status === 'blocked_max_devices') {
             lastUnlockError = t(
-              '⛔ AKSES DITOLAK DI PERANGKAT KE-2! Lisensi 1-Perangkat sudah terikat pada HP Utama Customer (ID: ' + res.ownerDevId + ') dan tidak berlaku di perangkat ini (ID: ' + res.activeDevId + '). Perangkat ini hanya dapat melihat isi microsite (Read-Only).',
-              '⛔ ACCESS DENIED ON 2ND DEVICE! Slot 1/1 is permanently bound to the Primary Customer Phone (ID: ' + res.ownerDevId + ') and is invalid on this device (ID: ' + res.activeDevId + '). This device is View-Only.'
+              '⛔ AKSES DITOLAK DI PERANGKAT KE-3+! Kuota maksimal 2 perangkat (2/2) sudah penuh (' + res.ownerDevId + '). Perangkat ke-3 dan seterusnya (' + res.activeDevId + ') tidak dapat membuka kunci (walaupun menggunakan Master PIN) kecuali di-reset melalui Google Sheets!',
+              '⛔ ACCESS DENIED ON 3RD+ DEVICE! Maximum 2-device quota (2/2) is full (' + res.ownerDevId + '). A 3rd+ device (' + res.activeDevId + ') cannot unlock unless reset in Google Sheets!'
             );
             renderModal(lastUnlockError, 'err');
             return;
@@ -13249,22 +13337,35 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
             return;
           }
 
-          if (res.status === 'customer' || res.status === 'customer_bound_now' || res.status === 'master') {
-            if (cfg.cloudLockUrl && res.status !== 'master') {
+          if (res.status === 'customer' || res.status === 'customer_bound_now') {
+            // ALWAYS verify against Cloud 2-Device Lock (Google Sheets) if configured — including when using Backup Master PIN!
+            if (cfg.cloudLockUrl) {
               const cloudCheck = await verifyCloudSingleDeviceClaim(activeDevId, codeAttempt, pinAttempt);
               if (cloudCheck && cloudCheck.ok === false) {
+                if (cloudCheck.ownerDeviceIds || cloudCheck.ownerDeviceId) {
+                  state.boundOwnerDeviceIds = mergeDeviceIdLists(cloudCheck.ownerDeviceIds, cloudCheck.ownerDeviceId);
+                  state.boundOwnerDeviceId = state.boundOwnerDeviceIds[0] || '';
+                  saveOwnerDeviceCert(state.boundOwnerDeviceIds);
+                }
                 lastUnlockError = t(
-                  '⛔ CLOUD LOCK 1-PERANGKAT MENOLAK AKSES: Lisensi ini sudah diklaim oleh perangkat pertama (' + (cloudCheck.ownerDeviceId || 'HP Customer') + '). Perangkat ke-2 hanya bisa melihat isi microsite!',
-                  '⛔ CLOUD 1-DEVICE LOCK DENIED ACCESS: This license is already claimed by the 1st device (' + (cloudCheck.ownerDeviceId || 'Customer Phone') + ').'
+                  '⛔ KUOTA MAKSIMAL 2 PERANGKAT (2/2) SUDAH PENUH DI GOOGLE SHEETS (' + (cloudCheck.ownerDeviceId || '2 HP Customer') + ')! Perangkat ke-3 dan seterusnya (' + activeDevId + ') tidak bisa mengklaim kunci (termasuk dengan Master PIN) kecuali di-reset terlebih dahulu di Google Sheets.',
+                  '⛔ MAX 2-DEVICE QUOTA (2/2) FULL IN GOOGLE SHEETS (' + (cloudCheck.ownerDeviceId || '2 Customer Phones') + ')! A 3rd+ device (' + activeDevId + ') cannot unlock unless reset in Google Sheets.'
                 );
                 renderModal(lastUnlockError, 'err');
                 return;
               }
+              if (cloudCheck && (cloudCheck.ownerDeviceIds || cloudCheck.ownerDeviceId)) {
+                registerCurrentDeviceInSlot(cloudCheck.ownerDeviceIds || cloudCheck.ownerDeviceId);
+              } else {
+                registerCurrentDeviceInSlot();
+              }
+            } else {
+              registerCurrentDeviceInSlot();
             }
+
             lastUnlockError = '';
-            state.boundOwnerDeviceId = realPhysicalDeviceId;
             state.unlocked = true;
-            state.unlockedBy = res.status === 'master' ? 'master' : 'customer';
+            state.unlockedBy = res.usedBackupPin ? 'backup_master_pin' : 'customer';
             savePinState();
             applyDomLockClasses();
             modal.close();
@@ -13276,9 +13377,10 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
                 toastEl.style.cssText = 'position:fixed;top:48px;left:50%;transform:translateX(-50%);z-index:2147483646;padding:11px 18px;border-radius:999px;background:linear-gradient(135deg,#059669,#0284c7);border:1.5px solid #6ee7b7;color:#ffffff;font:800 12.5px/1.35 system-ui,sans-serif;box-shadow:0 14px 36px rgba(0,0,0,0.65);text-align:center;max-width:calc(100vw - 24px)';
                 document.body.appendChild(toastEl);
               }
+              const slotNum = Math.max(1, state.boundOwnerDeviceIds.indexOf(realPhysicalDeviceId) + 1);
               toastEl.textContent = t(
-                '✏️ Edit Mode Aktif (1-HP: ' + realPhysicalDeviceId + ')! Seluruh fasilitas Edit, Tambah, Tema, Perpustakaan 3D & 19 Game kini terbuka.',
-                '✏️ Edit Mode Active (1-Phone: ' + realPhysicalDeviceId + ')! All Edit, Add, Theme, 3D Library & 19 Games are now unlocked.'
+                '✏️ Edit Mode Aktif (Slot ' + slotNum + '/2 · ' + realPhysicalDeviceId + ')!' + (res.usedBackupPin ? ' [Dibuka dengan Kunci Ganda / Master PIN]' : ''),
+                '✏️ Edit Mode Active (Slot ' + slotNum + '/2 · ' + realPhysicalDeviceId + ')!' + (res.usedBackupPin ? ' [Unlocked via Backup Master PIN]' : '')
               );
               toastEl.hidden = false;
               clearTimeout(toastEl._timer);
@@ -13286,8 +13388,8 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
             } catch (e) {}
           } else {
             lastUnlockError = t(
-              '⚠ Kode PIN atau Kode Kunci Perangkat belum sesuai.',
-              '⚠ Incorrect PIN or Device License Code.'
+              '⚠ Kode PIN (Utama / Kunci Ganda) atau Kode Kunci Perangkat belum sesuai.',
+              '⚠ Incorrect PIN (Primary / Backup Key) or Device License Code.'
             );
             renderModal(lastUnlockError, 'err');
           }
@@ -13299,17 +13401,19 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
         };
         setTimeout(() => { try { inp?.focus(); } catch (e) {} }, 60);
       } else {
+        const regList = mergeDeviceIdLists(lockedHardwareDeviceIds, state.boundOwnerDeviceIds);
+        const mySlot = Math.max(1, regList.indexOf(realPhysicalDeviceId) + 1);
         modal.innerHTML =
           '<div class="v14-modal-head">' +
-            '<strong>✏️ ' + t('EDIT MODE AKTIF · LISENSI 1-HP CUSTOMER', 'EDIT MODE ACTIVE · 1-PHONE CUSTOMER LICENSE') + '</strong>' +
+            '<strong>✏️ ' + t('EDIT MODE AKTIF · LISENSI MAKS 2 PERANGKAT', 'EDIT MODE ACTIVE · MAX 2-DEVICE LICENSE') + '</strong>' +
             '<button type="button" class="v14-modal-close" data-v14-close aria-label="Tutup">×</button>' +
           '</div>' +
           (flashMsg ? `<div class="v14-status-msg ${flashType === 'ok' ? 'is-ok' : 'is-err'}" style="margin-bottom:10px">${flashMsg}</div>` : '') +
           '<div style="padding:10px 12px;border-radius:14px;background:rgba(16,185,129,0.14);border:1px solid rgba(78,245,168,0.45);margin-bottom:12px;font-size:12px;color:#d1fae5">' +
-            '<strong>✓ ' + t('Kuota Perangkat: 1/1 Terikat Resmi pada ID-HP: ' + realPhysicalDeviceId, 'Device Quota: 1/1 Officially Bound to Phone ID: ' + realPhysicalDeviceId) + '</strong><br>' +
+            '<strong>✓ ' + t('Kuota Perangkat: Slot ' + mySlot + '/' + MAX_ALLOWED_DEVICES + ' Terdaftar pada ID-HP: ' + realPhysicalDeviceId, 'Device Quota: Slot ' + mySlot + '/' + MAX_ALLOWED_DEVICES + ' Bound to Phone ID: ' + realPhysicalDeviceId) + '</strong><br>' +
             t(
-              'Kode Kunci Kriptografis (<code>' + customerValidCode + '</code>) dan PIN Anda aktif di perangkat ini. Anda dapat mengedit isi microsite, mengubah tema, membuka Perpustakaan 3D & 19 Game, atau menekan tombol <strong>lock</strong> di pojok kiri atas untuk mengunci ulang.',
-              'Your Cryptographic License Code (<code>' + customerValidCode + '</code>) and PIN are active on this device. You can edit the microsite, change themes, open the 3D Library & 19 Games, or tap <strong>lock</strong> at the top-left to re-lock.'
+              'Lisensi microsite ini berlaku untuk maksimal 2 perangkat (' + (regList.join(' | ') || realPhysicalDeviceId) + '). Perangkat ke-3 dan seterusnya otomatis ditolak kecuali di-reset melalui Google Sheets.',
+              'This microsite license is valid for up to 2 devices (' + (regList.join(' | ') || realPhysicalDeviceId) + '). A 3rd+ device is automatically rejected unless reset in Google Sheets.'
             ) +
           '</div>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
@@ -13317,12 +13421,12 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
             '<button type="button" class="v14-key-btn" data-v14-lock-modal style="border-color:#ff8ab8;color:#ffd0e4;padding:10px 14px">🔒 ' + t('Lock (Kunci Ulang)', 'Lock Now') + '</button>' +
           '</div>' +
           '<div style="padding:12px;border-radius:14px;background:rgba(8,20,42,0.88);border:1px solid rgba(110,243,255,0.3)">' +
-            '<strong style="display:block;font-size:12px;color:#8ef5ff;margin-bottom:6px">✏️ ' + t('Informasi Lisensi 1-HP & Pengaturan PIN', '1-Phone License Info & PIN Settings') + '</strong>' +
+            '<strong style="display:block;font-size:12px;color:#8ef5ff;margin-bottom:6px">✏️ ' + t('Informasi Lisensi Maks 2-HP & Pengaturan PIN', 'Max 2-Phone License Info & PIN Settings') + '</strong>' +
             '<div style="font-size:11.5px;color:#bfe6ff;margin-bottom:8px;line-height:1.6">' +
-              '📱 ' + t('ID Perangkat HP Customer: ', 'Customer Phone ID: ') +
+              '📱 ' + t('ID Perangkat HP Ini (Slot ' + mySlot + '/2): ', 'This Phone ID (Slot ' + mySlot + '/2): ') +
               '<code style="padding:2px 7px;border-radius:6px;background:rgba(56,189,248,0.18);color:#7dd3fc;font-weight:800">' + realPhysicalDeviceId + '</code><br>' +
               '📲 ' + t('Kode Kunci Kriptografis HP Ini: ', 'Cryptographic Code for This Phone: ') +
-              '<code style="padding:2px 7px;border-radius:6px;background:rgba(16,185,129,0.18);color:#a7f3d0;font-weight:800">' + customerValidCode + '</code><br>' +
+              '<code style="padding:2px 7px;border-radius:6px;background:rgba(16,185,129,0.18);color:#a7f3d0;font-weight:800">' + thisPhoneLicenseCode + '</code><br>' +
               '🔑 ' + t('PIN Customer Saat Ini: ', 'Current Customer PIN: ') +
               '<code style="padding:2px 7px;border-radius:6px;background:rgba(110,243,255,0.16);color:#fff;font-weight:800">' + curCustPin.replace(/</g, '&lt;') + '</code>' +
             '</div>' +
@@ -13352,7 +13456,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
           }
           state.customPin = nextPin.slice(0, 32);
           savePinState();
-          renderModal(t('✓ PIN baru berhasil disimpan & dikunci khusus untuk ID Perangkat HP Customer ini!', '✓ New PIN saved & locked exclusively to this Customer Phone ID!'), 'ok');
+          renderModal(t('✓ PIN baru berhasil disimpan untuk perangkat Customer ini!', '✓ New PIN saved for this Customer device!'), 'ok');
         };
         const resetBtn = modal.querySelector('#v14ResetDefaultPinBtn');
         if (resetBtn) {
@@ -13396,16 +13500,18 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     get isOwnerDevice() { return isEffectiveOwnerDevice(); },
     get deviceId() { return getCurrentActiveDeviceId(); },
     get physicalDeviceId() { return realPhysicalDeviceId; },
-    get boundOwnerDeviceId() { return state.boundOwnerDeviceId; },
+    get boundOwnerDeviceId() { return (state.boundOwnerDeviceIds && state.boundOwnerDeviceIds[0]) || state.boundOwnerDeviceId || ''; },
+    get boundOwnerDeviceIds() { return state.boundOwnerDeviceIds || []; },
+    get maxDevices() { return MAX_ALLOWED_DEVICES; },
     get licenseCode() { return getCustomerBoundLicenseCode(); },
     get lastError() { return lastUnlockError; },
-    computeLicenseForDevice: (devId, pinStr) => computeLicenseCodeForDevice(devId, pinStr || getActiveCustomerPin()),
+    computeLicenseForDevice: (devId, pinStr) => computeLicenseCodeForDevice(devId, pinStr || studioPinConfigured),
     unlock: (pinAttempt, codeAttempt = '') => {
       const res = checkPinMatch(pinAttempt, codeAttempt);
-      if (res.status === 'blocked_second_device') {
+      if (res.status === 'blocked_max_devices') {
         lastUnlockError = t(
-          '⛔ AKSES DITOLAK DI PERANGKAT KE-2 (' + res.activeDevId + '): Lisensi 1-Perangkat sudah terkunci pada HP Utama Customer (' + res.ownerDevId + ')! Di HP ini Anda hanya bisa melihat isi microsite (Read-Only).',
-          '⛔ ACCESS DENIED ON 2ND DEVICE (' + res.activeDevId + '): The 1-Device license is permanently locked to the Primary Customer Phone (' + res.ownerDevId + ')!'
+          '⛔ AKSES DITOLAK DI PERANGKAT KE-3+ (' + res.activeDevId + '): Kuota maksimal 2 perangkat (2/2) sudah penuh (' + res.ownerDevId + ')! Perangkat ke-3 dan seterusnya hanya bisa melihat isi microsite kecuali di-reset di Google Sheets.',
+          '⛔ ACCESS DENIED ON 3RD+ DEVICE (' + res.activeDevId + '): Maximum 2-device quota (2/2) is full (' + res.ownerDevId + ')!'
         );
         return false;
       }
@@ -13416,28 +13522,37 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
         );
         return false;
       }
-      if (res.status === 'customer' || res.status === 'customer_bound_now' || res.status === 'master') {
+      if (res.status === 'customer' || res.status === 'customer_bound_now') {
         lastUnlockError = '';
-        state.boundOwnerDeviceId = realPhysicalDeviceId;
+        registerCurrentDeviceInSlot();
         state.unlocked = true;
-        state.unlockedBy = res.status === 'master' ? 'master' : 'customer';
+        state.unlockedBy = res.usedBackupPin ? 'backup_master_pin' : 'customer';
         savePinState();
         applyDomLockClasses();
-        if (cfg.cloudLockUrl && res.status !== 'master') {
+        // Enforce Cloud 2-Device Lock even when unlocked via Backup Master PIN!
+        if (cfg.cloudLockUrl) {
           verifyCloudSingleDeviceClaim(getCurrentActiveDeviceId(), codeAttempt || getCustomerBoundLicenseCode(), pinAttempt).then(cloudCheck => {
             if (cloudCheck && cloudCheck.ok === false) {
               state.unlocked = false;
-              state.boundOwnerDeviceId = cloudCheck.ownerDeviceId || state.boundOwnerDeviceId;
+              state.boundOwnerDeviceIds = mergeDeviceIdLists(cloudCheck.ownerDeviceIds, cloudCheck.ownerDeviceId);
+              state.boundOwnerDeviceId = state.boundOwnerDeviceIds[0] || '';
+              lastUnlockError = t(
+                '⛔ KUOTA MAKSIMAL 2 PERANGKAT (2/2) SUDAH PENUH DI GOOGLE SHEETS (' + (cloudCheck.ownerDeviceId || '2 HP Customer') + ')! Perangkat ke-3+ ditolak kecuali di-reset di Google Sheets.',
+                '⛔ MAX 2-DEVICE QUOTA (2/2) FULL IN GOOGLE SHEETS!'
+              );
               savePinState();
               applyDomLockClasses();
+            } else if (cloudCheck && (cloudCheck.ownerDeviceIds || cloudCheck.ownerDeviceId)) {
+              registerCurrentDeviceInSlot(cloudCheck.ownerDeviceIds || cloudCheck.ownerDeviceId);
+              savePinState();
             }
           }).catch(() => {});
         }
         return true;
       }
       lastUnlockError = t(
-        '⚠ Kode PIN atau Kode Kunci Perangkat belum sesuai.',
-        '⚠ Incorrect PIN or Device License Code.'
+        '⚠ Kode PIN (Utama / Kunci Ganda) atau Kode Kunci Perangkat belum sesuai.',
+        '⚠ Incorrect PIN (Primary / Backup Key) or Device License Code.'
       );
       return false;
     },
@@ -13449,7 +13564,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     },
     setPreviewMode: unlockedBool => {
       if (unlockedBool) {
-        state.boundOwnerDeviceId = realPhysicalDeviceId;
+        registerCurrentDeviceInSlot();
       }
       state.unlocked = !!unlockedBool;
       state.unlockedBy = unlockedBool ? 'preview' : '';
@@ -13458,6 +13573,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     syncFromStorage: () => {
       const fresh = loadPinState();
       if (fresh.customPin) state.customPin = fresh.customPin;
+      state.boundOwnerDeviceIds = fresh.boundOwnerDeviceIds;
       state.boundOwnerDeviceId = fresh.boundOwnerDeviceId;
       if (cfg.sessionMode !== 'always_locked' && fresh.unlocked && isEffectiveOwnerDevice()) {
         state.unlocked = true;
@@ -30169,8 +30285,8 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
               return (
                 `<div class="v19-pin-gate-box" id="v19ExclusivePinGateBox">` +
                   `<div style="font-size:44px;line-height:1;filter:drop-shadow(0 0 16px rgba(0,240,255,.55))">🛡️📚🎮</div>` +
-                  `<div style="display:inline-flex;align-items:center;gap:6px;margin:0 auto;padding:4px 12px;border-radius:999px;background:rgba(255,212,96,.16);border:1px solid #ffd460;color:#ffd460;font:800 10.5px system-ui">🛡️ 1-DEVICE CRYPTOGRAPHIC PIN LOCK · WYPHA V21</div>` +
-                  `<h3 style="margin:0;font:900 clamp(17px,4vw,22px)/1.3 Syne,system-ui;color:#fff">${isOwnerPhoneNow ? t('Akses Eksklusif 1 HP Utama Customer (' + activeDevId + ')', 'Exclusive 1 Primary Customer Phone Access (' + activeDevId + ')') : t('⛔ Ditolak di Perangkat Lain (Kuota 1/1 HP Terkunci)', '⛔ Denied on Other Devices (1/1 Phone Slot Locked)')}</h3>` +
+                  `<div style="display:inline-flex;align-items:center;gap:6px;margin:0 auto;padding:4px 12px;border-radius:999px;background:rgba(255,212,96,.16);border:1px solid #ffd460;color:#ffd460;font:800 10.5px system-ui">🛡️ MAX 2-DEVICE CRYPTOGRAPHIC PIN LOCK · WYPHA V21</div>` +
+                  `<h3 style="margin:0;font:900 clamp(17px,4vw,22px)/1.3 Syne,system-ui;color:#fff">${isOwnerPhoneNow ? t('Akses Eksklusif Customer (Maks 2 HP (' + activeDevId + ')', 'Exclusive 1 Primary Customer Phone Access (' + activeDevId + ')') : t('⛔ Ditolak di Perangkat ke-3+ (Kuota 2/2 HP Penuh)', '⛔ Denied on Other Devices (1/1 Phone Slot Locked)')}</h3>` +
                   `<p style="margin:0 auto;max-width:540px;font:500 12.5px/1.55 system-ui;color:#cbe8ff">` +
                     (isOwnerPhoneNow
                       ? t(

@@ -1,23 +1,23 @@
 ================================================================================
-WYPHA MAGIC QR STUDIO & MICROSITE — VERSI TERBARU V21 (CLOUDFLARE & ANDROID PWA)
+WYPHA MAGIC QR STUDIO & MICROSITE — VERSI V21 (MAKS 2 PERANGKAT & KUNCI GANDA)
 ================================================================================
-PEMBARUAN PADA VERSI V21:
-1. TAMPILAN TOMBOL POJOK KIRI ATAS MICROSITE LEBIH BERSIH & MINIMALIS:
-   - Saat Terkunci (Mode Pengunjung): Tombol pojok kiri atas hanya menampilkan
-     ikon gembok saja (`🔒`) tanpa teks tambahan.
-   - Saat PIN Benar Dimasukkan (Mode Customer): Tombol pojok kiri atas berubah
-     menjadi ikon pensil beserta tulisan kecil `✏️ edit mode` (untuk membuka
-     pengaturan PIN/lisensi) dan tombol kecil `lock` untuk mengunci ulang.
-2. PENGHAPUSAN FITUR SIMULASI HP PENCURI:
-   - Tombol "Uji HP Pencuri (Kedua)" di pojok kiri atas serta seluruh kotak
-     simulasi uji HP pencuri di dalam panel PIN telah dihapus sepenuhnya agar
-     tampilan untuk customer bersih dan profesional.
-   - Sistem proteksi 1-Perangkat (Kriptografi `KHP-XXXX-XXXX` & Cloud Lock
-     Google Sheets) tetap bekerja penuh di latar belakang untuk mengunci akses
-     edit khusus pada 1 HP Utama Customer.
-3. PEMBARUAN LABEL VERSI KE V21 & PERBAIKAN PWA ANDROID:
-   - Seluruh label versi di Studio, Microsite, Manifest PWA, dan Service Worker
-     telah diperbarui ke versi terbaru **V21**.
-   - Ikon aplikasi Android (`icon-192.png` dan `icon-512.png`) siap diinstal
-     penuh sebagai aplikasi mandiri (WebAPK) di Chrome Android.
+PEMBARUAN UTAMA PADA PAKET INI:
+1. KLAIM KUNCI MAKSIMAL 2 PERANGKAT (SLOT 1/2 & SLOT 2/2):
+   - Setiap microsite yang diekspor kini mengizinkan klaim kunci untuk MAKSIMAL
+     2 PERANGKAT SAJA (HP ke-1 dan HP ke-2).
+   - Perangkat ke-3 dan seterusnya OTOMATIS DITOLAK dan hanya berada dalam Mode
+     Lihat (Read-Only), kecuali di-reset terlebih dahulu melalui Google Sheets
+     yang memuat script (`public/GOOGLE-APPS-SCRIPT-2-DEVICE-LOCK-V21.txt`).
+   - Di Google Sheets Anda, terdapat menu "🛡️ Admin Kunci 2-HP WYPHA" untuk:
+     • Mereset penuh baris customer (kembali ke 0/2), atau
+     • Menghapus HP ke-2 saja (menyisakan HP ke-1 menjadi 1/2).
+
+2. MASTER PIN SEBAGAI KUNCI GANDA (PIN CADANGAN YANG TUNDUK PADA BATAS 2 HP):
+   - Master PIN kini tidak lagi bisa membobol batas kuota perangkat apabila
+     slot 2/2 sudah terisi penuh.
+   - Master PIN berfungsi murni sebagai KUNCI GANDA (PIN Cadangan) dari PIN
+     pertama pada proyek tersebut (contoh: PIN utama `5555` dan Master PIN
+     `WYPHA-ARYA` — jika lupa PIN pertama `5555`, pengguna dapat memasukkan
+     `WYPHA-ARYA`, namun tetap wajib berada di dalam kuota maksimal 2 perangkat
+     yang terdaftar di Google Sheets).
 ================================================================================

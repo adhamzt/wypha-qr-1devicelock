@@ -1,50 +1,63 @@
 // ============================================================================
-// GOOGLE APPS SCRIPT TERINTEGRASI GOOGLE SHEETS — WYPHA V20.2 (1-DEVICE LOCK)
+// GOOGLE APPS SCRIPT TERINTEGRASI GOOGLE SHEETS — WYPHA V21 (MAKSIMAL 2 PERANGKAT)
 // ============================================================================
-// FITUR UTAMA:
-// 1. Otomatis membuat & mengisi tab "Daftar_Kunci_Perangkat" di Google Sheets
-//    Anda setiap kali ada HP Customer yang mengklaim Kode Kunci & PIN (Slot 1/1)
-//    maupun ketika ada HP ke-2 (Pencuri) yang ditolak!
-// 2. Menampilkan kolom lengkap:
-//    A: Project ID | B: Nama Customer | C: ID-HP Terdaftar (Slot 1/1) |
-//    D: Status Kunci | E: Waktu Klaim Pertama | F: Terakhir Verifikasi |
-//    G: Percobaan HP Lain Ditolak | H: Catatan Admin
-// 3. Menyediakan menu khusus "🛡️ Admin Kunci 1-HP WYPHA" di bagian atas Google
+// FITUR UTAMA V21:
+// 1. Membatasi klaim kunci untuk MAKSIMAL 2 PERANGKAT SAJA (Slot 1/2 dan Slot 2/2)
+//    per Project ID di tab "Daftar_Kunci_Perangkat" Google Sheets Anda.
+// 2. Perangkat ke-3 dan seterusnya OTOMATIS DITOLAK (baik saat memasukkan PIN
+//    Utama maupun Master PIN / Kunci Ganda), kecuali di-reset terlebih dahulu
+//    di Google Sheets ini!
+// 3. Menampilkan kolom lengkap:
+//    A: Project ID | B: Nama Customer | C: ID-HP Terdaftar (Maks 2 HP: Slot 1 & 2) |
+//    D: Status Kunci (1/2 atau 2/2) | E: Waktu Klaim Pertama | F: Terakhir Verifikasi |
+//    G: Percobaan HP ke-3+ Ditolak | H: Catatan Admin
+// 4. Menyediakan menu khusus "🛡️ Admin Kunci 2-HP WYPHA" di bagian atas Google
 //    Sheets Anda untuk:
-//    - 🔄 Muat Ulang / Sinkronkan Tabel
-//    - 🔓 Reset Kunci Baris yang Dipilih (Agar Customer Bisa Ganti HP Baru)
-//    - 🧪 Tambah Data Uji Coba (Tes Koneksi Tabel)
+//    - 🔄 Siapkan & Sinkronkan Tabel Kunci Perangkat
+//    - 🔓 Reset Kunci Penuh (0/2) pada Baris yang Dipilih
+//    - 📱 Hapus HP ke-2 Saja pada Baris yang Dipilih (Sisakan HP ke-1 -> 1/2)
+//    - 🧪 Tambah Baris Tes (Uji Reaksi Tabel)
 //    - 🗑️ Reset Semua Kunci Perangkat
 //
-// CARA PASANG DI GOOGLE SHEETS ANDA (PENTING AGAR BEREAKSI!):
+// CARA UPDATE DI GOOGLE SHEETS ANDA:
 // 1. Buka Google Sheets Anda:
 //    https://docs.google.com/spreadsheets/d/1stMb-JL7yz08qsUK7gkEBb-CXB7ZZHbTu5H6rliw2KI/edit
 // 2. Klik menu "Ekstensi" (Extensions) -> "Apps Script".
-// 3. Hapus semua kode lama di Code.gs, lalu TEMPEL (Paste) seluruh kode ini.
-// 4. Klik ikon Simpan (💾), lalu pilih fungsi "setupSheetAndTest" di bar atas
-//    dan klik "Jalankan" (Run) -> Berikan izin akses (Review Permissions -> Allow).
-// 5. Klik tombol biru "Terapkan" (Deploy) di kanan atas -> "Kelola deployment"
-//    (Manage deployments) -> Klik ikon Pensil (Edit) -> Pilih Versi: "Versi baru"
-//    (New version) -> Klik "Terapkan" (Deploy).
-//    (Atau pilih "Deployment baru" -> Jenis: "Aplikasi Web", Jalankan sebagai:
-//    "Saya", Akses: "Siapa saja / Anyone").
-// 6. Salin URL Web App (.../exec) ke kolom "URL Server Kunci 1-HP" di Studio!
+// 3. Hapus kode lama di Code.gs, lalu TEMPEL (Paste) seluruh kode V21 ini.
+// 4. Klik Simpan (💾), lalu klik tombol biru "Terapkan" (Deploy) ->
+//    "Kelola deployment" (Manage deployments) -> Klik ikon Pensil (Edit) ->
+//    Pilih Versi: "Versi baru" (New version) -> Klik "Terapkan" (Deploy).
 // ============================================================================
 
 var SHEET_ID = '1stMb-JL7yz08qsUK7gkEBb-CXB7ZZHbTu5H6rliw2KI';
 var SHEET_NAME = 'Daftar_Kunci_Perangkat';
+var MAX_DEVICES = 2;
 
 function onOpen() {
   try {
     SpreadsheetApp.getUi()
-      .createMenu('🛡️ Admin Kunci 1-HP WYPHA')
+      .createMenu('🛡️ Admin Kunci 2-HP WYPHA')
       .addItem('🔄 Siapkan & Sinkronkan Tabel Kunci Perangkat', 'setupSheet')
-      .addItem('🔓 Reset Kunci pada Baris yang Dipilih (Ganti HP Customer)', 'resetSelectedRowLock')
+      .addItem('🔓 Reset Kunci Penuh (0/2) pada Baris yang Dipilih', 'resetSelectedRowLock')
+      .addItem('📱 Hapus HP ke-2 Saja pada Baris yang Dipilih (Sisakan HP ke-1)', 'removeSecondDeviceOnSelectedRow')
       .addSeparator()
       .addItem('🧪 Tambah Baris Tes (Uji Reaksi Tabel)', 'setupSheetAndTest')
       .addItem('🗑️ Reset Semua Kunci Perangkat', 'resetAllDeviceLocks')
       .addToUi();
   } catch (err) {}
+}
+
+function parseDeviceList_(raw) {
+  if (!raw) return [];
+  var parts = String(raw).split(/[,|;\n]+/);
+  var out = [];
+  for (var i = 0; i < parts.length; i++) {
+    var clean = String(parts[i] || '').trim().toUpperCase();
+    if (clean && out.indexOf(clean) === -1 && out.length < MAX_DEVICES) {
+      out.push(clean);
+    }
+  }
+  return out;
 }
 
 function getTargetSheet_() {
@@ -63,11 +76,11 @@ function getTargetSheet_() {
     var headers = [
       'Project ID',
       'Nama Customer',
-      'ID-HP Terdaftar (Slot 1/1)',
+      'ID-HP Terdaftar (Maks 2 HP: Slot 1/2 & 2/2)',
       'Status Kunci',
       'Waktu Klaim Pertama',
       'Terakhir Verifikasi',
-      'Percobaan HP Lain Ditolak',
+      'Percobaan HP ke-3+ Ditolak',
       'Catatan Admin'
     ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -77,8 +90,11 @@ function getTargetSheet_() {
       .setFontColor('#38bdf8');
     sheet.setFrozenRows(1);
     for (var c = 1; c <= headers.length; c++) {
-      sheet.setColumnWidth(c, c <= 3 ? 210 : 175);
+      sheet.setColumnWidth(c, c === 3 ? 260 : (c <= 2 ? 200 : 175));
     }
+  } else {
+    sheet.getRange(1, 3).setValue('ID-HP Terdaftar (Maks 2 HP: Slot 1/2 & 2/2)');
+    sheet.getRange(1, 7).setValue('Percobaan HP ke-3+ Ditolak');
   }
   return sheet;
 }
@@ -100,13 +116,13 @@ function setupSheet() {
   for (var k in props) {
     if (k.indexOf('WYPHA_LOCK_') === 0) {
       var projId = k.replace('WYPHA_LOCK_', '');
-      var devId = props[k];
-      if (devId && !existingRows[projId]) {
+      var devList = parseDeviceList_(props[k]);
+      if (devList.length && !existingRows[projId]) {
         sheet.appendRow([
           projId,
           'Customer (' + projId + ')',
-          devId,
-          'TERKUNCI (1/1)',
+          devList.join(' | '),
+          'TERKUNCI (' + devList.length + '/' + MAX_DEVICES + ')',
           nowStr,
           nowStr,
           0,
@@ -121,9 +137,9 @@ function setupSheet() {
 function setupSheetAndTest() {
   var res = handleLockAction_({
     action: 'claim_or_verify',
-    projectId: 'TEST-CONNECTION-V20',
-    customerName: 'Uji Koneksi Tabel WYPHA',
-    deviceId: 'W20-TEST-1234',
+    projectId: 'TEST-CONNECTION-V21',
+    customerName: 'Uji Koneksi Tabel WYPHA (Maks 2 HP)',
+    deviceId: 'W20-TEST-1111',
     code: 'KHP-TEST'
   });
   Logger.log(JSON.stringify(res));
@@ -154,13 +170,16 @@ function handleLockAction_(data) {
   var nowStr = formatWibNow_();
 
   if (action === 'status' || action === 'list') {
-    var sheetOwner = rowIdx > 0 ? String(sheet.getRange(rowIdx, 3).getValue() || '').trim().toUpperCase() : '';
-    var existing = sheetOwner || String(props.getProperty(propKey) || '').trim().toUpperCase();
+    var sheetOwners = rowIdx > 0 ? parseDeviceList_(sheet.getRange(rowIdx, 3).getValue()) : [];
+    var existingList = sheetOwners.length ? sheetOwners : parseDeviceList_(props.getProperty(propKey));
     return {
       ok: true,
       projectId: projectId,
-      ownerDeviceId: existing,
-      status: existing ? 'LOCKED_1_OF_1' : 'UNCLAIMED_0_OF_1'
+      maxDevices: MAX_DEVICES,
+      usedSlots: existingList.length,
+      ownerDeviceIds: existingList,
+      ownerDeviceId: existingList.join(' | '),
+      status: existingList.length >= MAX_DEVICES ? 'LOCKED_2_OF_2' : (existingList.length === 1 ? 'LOCKED_1_OF_2' : 'UNCLAIMED_0_OF_2')
     };
   }
 
@@ -168,116 +187,144 @@ function handleLockAction_(data) {
     props.deleteProperty(propKey);
     if (rowIdx > 0) {
       sheet.getRange(rowIdx, 3).setValue('');
-      sheet.getRange(rowIdx, 4).setValue('DIRESET (SIAP KLAIM HP BARU)');
+      sheet.getRange(rowIdx, 4).setValue('DIRESET (0/2 · SIAP KLAIM HP BARU)');
       sheet.getRange(rowIdx, 6).setValue(nowStr);
-      sheet.getRange(rowIdx, 8).setValue('Direset pada ' + nowStr);
+      sheet.getRange(rowIdx, 8).setValue('Direset penuh pada ' + nowStr);
     }
-    return { ok: true, status: 'RESET_SUCCESS', projectId: projectId };
+    return { ok: true, status: 'RESET_SUCCESS', projectId: projectId, maxDevices: MAX_DEVICES, usedSlots: 0, ownerDeviceIds: [] };
   }
 
   if (!deviceId) {
     return { ok: false, reason: 'MISSING_DEVICE_ID' };
   }
 
-  // Baca pemilik dari Sheet terlebih dahulu (agar jika Admin menghapus sel ID-HP di Sheet, otomatis ikut ter-reset!)
-  var ownerInSheet = '';
+  // Baca daftar perangkat dari Kolom C Sheet terlebih dahulu:
+  // Jika Admin menghapus sel Kolom C (atau menghapus salah satu ID-HP di Kolom C), ScriptProperties otomatis mengikuti isi Sheet!
+  var ownersInSheet = [];
   var statusInSheet = '';
   if (rowIdx > 0) {
-    ownerInSheet = String(sheet.getRange(rowIdx, 3).getValue() || '').trim().toUpperCase();
+    ownersInSheet = parseDeviceList_(sheet.getRange(rowIdx, 3).getValue());
     statusInSheet = String(sheet.getRange(rowIdx, 4).getValue() || '').trim().toUpperCase();
-    if (!ownerInSheet || statusInSheet.indexOf('RESET') !== -1) {
+    if (!ownersInSheet.length || statusInSheet.indexOf('RESET') !== -1) {
       props.deleteProperty(propKey);
-      ownerInSheet = '';
-    }
-  }
-
-  var existingOwner = ownerInSheet || String(props.getProperty(propKey) || '').trim().toUpperCase();
-
-  // KASUS 1: Slot 1/1 Belum Diklaim -> Kunci ke HP Pertama Ini & Tulis ke Google Sheets!
-  if (!existingOwner) {
-    props.setProperty(propKey, deviceId);
-    if (rowIdx > 0) {
-      if (customerName) sheet.getRange(rowIdx, 2).setValue(customerName);
-      sheet.getRange(rowIdx, 3).setValue(deviceId);
-      sheet.getRange(rowIdx, 4).setValue('TERKUNCI (1/1)');
-      if (!sheet.getRange(rowIdx, 5).getValue()) sheet.getRange(rowIdx, 5).setValue(nowStr);
-      sheet.getRange(rowIdx, 6).setValue(nowStr);
-      sheet.getRange(rowIdx, 8).setValue('Aktif di HP Utama Customer');
+      ownersInSheet = [];
     } else {
-      sheet.appendRow([
-        projectId,
-        customerName || ('Customer ' + projectId),
-        deviceId,
-        'TERKUNCI (1/1)',
-        nowStr,
-        nowStr,
-        0,
-        'Klaim Otomatis Slot 1/1'
-      ]);
+      props.setProperty(propKey, ownersInSheet.join(' | '));
     }
-    SpreadsheetApp.flush();
-    return {
-      ok: true,
-      status: 'CLAIMED_SLOT_1_OF_1',
-      projectId: projectId,
-      ownerDeviceId: deviceId
-    };
   }
 
-  // KASUS 2: HP yang Sama (HP Utama Customer) Membuka Kembali -> Izinkan & Update Waktu Verifikasi!
-  if (existingOwner === deviceId) {
-    props.setProperty(propKey, deviceId);
+  var existingOwners = rowIdx > 0 ? ownersInSheet : parseDeviceList_(props.getProperty(propKey));
+
+  // KASUS 1: Perangkat Ini SUDAH Terdaftar di Slot 1/2 atau Slot 2/2 -> Izinkan & Update Waktu Verifikasi!
+  var existingIdx = existingOwners.indexOf(deviceId);
+  if (existingIdx !== -1) {
+    var joinedExisting = existingOwners.join(' | ');
+    props.setProperty(propKey, joinedExisting);
+    var statusLabel = existingOwners.length >= MAX_DEVICES
+      ? 'TERKUNCI PENUH (2/2)'
+      : 'TERKUNCI (' + existingOwners.length + '/' + MAX_DEVICES + ')';
     if (rowIdx > 0) {
       if (customerName && !sheet.getRange(rowIdx, 2).getValue()) {
         sheet.getRange(rowIdx, 2).setValue(customerName);
       }
-      sheet.getRange(rowIdx, 3).setValue(existingOwner);
-      sheet.getRange(rowIdx, 4).setValue('TERKUNCI (1/1)');
+      sheet.getRange(rowIdx, 3).setValue(joinedExisting);
+      sheet.getRange(rowIdx, 4).setValue(statusLabel);
       sheet.getRange(rowIdx, 6).setValue(nowStr);
     } else {
       sheet.appendRow([
         projectId,
         customerName || ('Customer ' + projectId),
-        existingOwner,
-        'TERKUNCI (1/1)',
+        joinedExisting,
+        statusLabel,
         nowStr,
         nowStr,
         0,
-        'Verifikasi Ulang HP Utama'
+        'Verifikasi Ulang HP ke-' + (existingIdx + 1)
       ]);
     }
     SpreadsheetApp.flush();
     return {
       ok: true,
       status: 'VERIFIED_OWNER_DEVICE',
+      slot: existingIdx + 1,
+      maxDevices: MAX_DEVICES,
+      usedSlots: existingOwners.length,
       projectId: projectId,
-      ownerDeviceId: existingOwner
+      ownerDeviceIds: existingOwners,
+      ownerDeviceId: joinedExisting
     };
   }
 
-  // KASUS 3: HP ke-2 / HP Pencuri Mencoba Masuk -> TOLAK & Catat di Kolom G Google Sheets!
+  // KASUS 2: Slot Masih Tersedia (< 2 Perangkat, yaitu Slot 1/2 atau Slot 2/2) -> Daftarkan Perangkat Ini!
+  if (existingOwners.length < MAX_DEVICES) {
+    existingOwners.push(deviceId);
+    var joinedNew = existingOwners.join(' | ');
+    props.setProperty(propKey, joinedNew);
+    var newStatusLabel = existingOwners.length >= MAX_DEVICES
+      ? 'TERKUNCI PENUH (2/2)'
+      : 'TERKUNCI (1/2)';
+    var claimNote = existingOwners.length === 1
+      ? 'Klaim Slot 1/2 (HP ke-1 Aktif)'
+      : 'Klaim Slot 2/2 (HP ke-1 & ke-2 Aktif)';
+    if (rowIdx > 0) {
+      if (customerName) sheet.getRange(rowIdx, 2).setValue(customerName);
+      sheet.getRange(rowIdx, 3).setValue(joinedNew);
+      sheet.getRange(rowIdx, 4).setValue(newStatusLabel);
+      if (!sheet.getRange(rowIdx, 5).getValue()) sheet.getRange(rowIdx, 5).setValue(nowStr);
+      sheet.getRange(rowIdx, 6).setValue(nowStr);
+      sheet.getRange(rowIdx, 8).setValue(claimNote);
+    } else {
+      sheet.appendRow([
+        projectId,
+        customerName || ('Customer ' + projectId),
+        joinedNew,
+        newStatusLabel,
+        nowStr,
+        nowStr,
+        0,
+        claimNote
+      ]);
+    }
+    SpreadsheetApp.flush();
+    return {
+      ok: true,
+      status: existingOwners.length === 1 ? 'CLAIMED_SLOT_1_OF_2' : 'CLAIMED_SLOT_2_OF_2',
+      slot: existingOwners.length,
+      maxDevices: MAX_DEVICES,
+      usedSlots: existingOwners.length,
+      projectId: projectId,
+      ownerDeviceIds: existingOwners,
+      ownerDeviceId: joinedNew
+    };
+  }
+
+  // KASUS 3: Kuota 2 Perangkat (2/2) SUDAH PENUH & Ini Adalah Perangkat ke-3+ -> TOLAK!
+  var fullOwnersStr = existingOwners.join(' | ');
   if (rowIdx > 0) {
     var prevBlocked = Number(sheet.getRange(rowIdx, 7).getValue() || 0) || 0;
     sheet.getRange(rowIdx, 7).setValue(prevBlocked + 1);
-    sheet.getRange(rowIdx, 8).setValue('HP Lain Ditolak (' + deviceId + ') pada ' + nowStr);
+    sheet.getRange(rowIdx, 8).setValue('HP ke-3+ Ditolak (' + deviceId + ') pada ' + nowStr);
   } else {
     sheet.appendRow([
       projectId,
       customerName || ('Customer ' + projectId),
-      existingOwner,
-      'TERKUNCI (1/1)',
+      fullOwnersStr,
+      'TERKUNCI PENUH (2/2)',
       nowStr,
       nowStr,
       1,
-      'HP Lain Ditolak (' + deviceId + ') pada ' + nowStr
+      'HP ke-3+ Ditolak (' + deviceId + ') pada ' + nowStr
     ]);
   }
   SpreadsheetApp.flush();
   return {
     ok: false,
-    status: 'REJECTED_SECOND_DEVICE',
+    status: 'REJECTED_MAX_2_DEVICES',
+    maxDevices: MAX_DEVICES,
+    usedSlots: existingOwners.length,
     projectId: projectId,
-    ownerDeviceId: existingOwner
+    ownerDeviceIds: existingOwners,
+    ownerDeviceId: fullOwnersStr
   };
 }
 
@@ -301,9 +348,10 @@ function doGet(e) {
     setupSheet();
     return ContentService.createTextOutput(JSON.stringify({
       ok: true,
-      service: 'WYPHA 1-Device Lock Google Sheets Server V20.2',
+      service: 'WYPHA Max 2-Device Lock Google Sheets Server V21',
+      maxDevices: MAX_DEVICES,
       sheetName: SHEET_NAME,
-      message: 'Server Aktif & Terhubung ke Google Sheets! Gunakan URL ini di kolom URL Server Kunci 1-HP Studio.'
+      message: 'Server Aktif (Maksimal 2 Perangkat per Project ID) & Terhubung ke Google Sheets!'
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({
@@ -354,7 +402,33 @@ function resetSelectedRowLock() {
     return;
   }
   handleLockAction_({ action: 'reset', projectId: projId });
-  SpreadsheetApp.getUi().alert('✓ Kunci 1-Perangkat untuk "' + (custName || projId) + '" berhasil di-reset! Sekarang Customer dapat mengaktifkan di HP barunya.');
+  SpreadsheetApp.getUi().alert('✓ Kunci perangkat untuk "' + (custName || projId) + '" berhasil di-reset ke 0/2! Sekarang 2 perangkat baru dapat mengklaim kunci.');
+}
+
+function removeSecondDeviceOnSelectedRow() {
+  var sheet = getTargetSheet_();
+  var range = sheet.getActiveRange();
+  if (!range || range.getRow() < 2) {
+    SpreadsheetApp.getUi().alert('Pilih salah satu baris data Customer (baris ke-2 atau lebih) terlebih dahulu.');
+    return;
+  }
+  var row = range.getRow();
+  var projId = String(sheet.getRange(row, 1).getValue() || '').trim();
+  var custName = String(sheet.getRange(row, 2).getValue() || '').trim();
+  var owners = parseDeviceList_(sheet.getRange(row, 3).getValue());
+  if (owners.length < 2) {
+    SpreadsheetApp.getUi().alert('Baris ini baru memiliki ' + owners.length + ' perangkat terdaftar.');
+    return;
+  }
+  var firstOnly = owners[0];
+  var nowStr = formatWibNow_();
+  PropertiesService.getScriptProperties().setProperty('WYPHA_LOCK_' + projId, firstOnly);
+  sheet.getRange(row, 3).setValue(firstOnly);
+  sheet.getRange(row, 4).setValue('TERKUNCI (1/2)');
+  sheet.getRange(row, 6).setValue(nowStr);
+  sheet.getRange(row, 8).setValue('HP ke-2 dihapus pada ' + nowStr + ' (Sisa Slot 1/2)');
+  SpreadsheetApp.flush();
+  SpreadsheetApp.getUi().alert('✓ HP ke-2 untuk "' + (custName || projId) + '" berhasil dihapus! HP ke-1 (' + firstOnly + ') tetap aktif (1/2) dan Slot 2/2 kini kosong.');
 }
 
 function resetAllDeviceLocks() {
