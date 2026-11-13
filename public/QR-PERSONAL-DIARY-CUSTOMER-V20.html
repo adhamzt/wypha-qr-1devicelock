@@ -842,7 +842,8 @@ body.has-theme-image .ending{background:linear-gradient(180deg,color-mix(in srgb
         const prodOwnerCertKey = 'wypha-v201-prod-owner-cert:' + prodType;
         const rawCert = (window.localStorage && (window.localStorage.getItem(ownerCertKey) || window.localStorage.getItem(prodOwnerCertKey))) || (window.sessionStorage && window.sessionStorage.getItem(ownerCertKey));
         let simulateThief = false;
-        let boundId = String(clCfg.allowedDeviceId || '').trim().toUpperCase();
+        const rawAllowed = String(clCfg.allowedDeviceId || '').trim().toUpperCase();
+        let boundId = /^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/.test(rawAllowed) ? rawAllowed : '';
         if (rawCert) {
           const pCert = JSON.parse(rawCert);
           if (pCert?.simulateThiefDevice === true) simulateThief = true;
@@ -7101,6 +7102,9 @@ html.qfs-wow-active:not(.qfs-wow-opened){overflow:hidden}
         localLang = '';
         renderTree();
       });
+      document.addEventListener('wypha-pin-state-changed', () => {
+        renderTree();
+      });
 
       const refreshFtFromVault = () => {
         loadDualVault(ftKey).then(saved => {
@@ -12636,7 +12640,12 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     },
     C?.customerLock || {}
   );
-  const projId = String(C?.projectId || C?.product || 'wypha');
+  const rawCfgAllowed = String(cfg.allowedDeviceId || '').trim();
+  const isValidHwDeviceId = id => /^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/i.test(String(id || '').trim());
+  const lockedHardwareDeviceId = isValidHwDeviceId(rawCfgAllowed) ? rawCfgAllowed.toUpperCase() : '';
+  const customProjectLabel = (!lockedHardwareDeviceId && rawCfgAllowed) ? rawCfgAllowed : '';
+  const projId = String(customProjectLabel || C?.projectId || C?.product || 'wypha');
+  const customerName = String(C?.personName || C?.customerName || customProjectLabel || 'WYPHA JUNIOR').trim();
   const prodType = String(C?.product || 'wypha');
   const pinStateKey = 'wypha-v14-pin-state:' + projId;
   const prodPinStateKey = 'wypha-v144-prod:wypha-v14-pin-state:' + prodType;
@@ -12738,7 +12747,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
   const getConfiguredMasterPin = () => String(cfg.masterPin || 'WYPHA99').trim();
 
   const loadOwnerDeviceCert = () => {
-    let boundOwnerDeviceId = String(cfg.allowedDeviceId || '').trim().toUpperCase();
+    let boundOwnerDeviceId = lockedHardwareDeviceId;
     let simulateThiefDevice = false;
     try {
       const raw =
@@ -12751,7 +12760,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
           if (parsed.simulateThiefDevice === true) {
             simulateThiefDevice = true;
           }
-          if (typeof parsed.boundOwnerDeviceId === 'string' && parsed.boundOwnerDeviceId.trim()) {
+          if (typeof parsed.boundOwnerDeviceId === 'string' && isValidHwDeviceId(parsed.boundOwnerDeviceId)) {
             boundOwnerDeviceId = parsed.boundOwnerDeviceId.trim().toUpperCase();
           }
         }
@@ -12759,7 +12768,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     } catch (e) {}
     if (!boundOwnerDeviceId) {
       const ckOwner = readCookieVal(ownerCookieName);
-      if (ckOwner && ckOwner.startsWith('W20-')) boundOwnerDeviceId = ckOwner.toUpperCase();
+      if (ckOwner && isValidHwDeviceId(ckOwner)) boundOwnerDeviceId = ckOwner.toUpperCase();
     }
     return { boundOwnerDeviceId, simulateThiefDevice };
   };
@@ -12871,8 +12880,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
   const isEffectiveOwnerDevice = () => {
     if (cfg.singleDeviceLock === false) return true;
     if (state.simulateThiefDevice) return false;
-    const allowedCfg = String(cfg.allowedDeviceId || '').trim().toUpperCase();
-    if (allowedCfg && allowedCfg !== realPhysicalDeviceId) return false;
+    if (lockedHardwareDeviceId && lockedHardwareDeviceId !== realPhysicalDeviceId) return false;
     return !!state.boundOwnerDeviceId && state.boundOwnerDeviceId === realPhysicalDeviceId;
   };
 
@@ -12882,7 +12890,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
 
   // The Customer's 1-Device License Code (bound mathematically to the Customer's Phone ID!)
   const getCustomerBoundLicenseCode = () => {
-    const ownerId = state.boundOwnerDeviceId || String(cfg.allowedDeviceId || '').trim().toUpperCase() || realPhysicalDeviceId;
+    const ownerId = state.boundOwnerDeviceId || lockedHardwareDeviceId || realPhysicalDeviceId;
     return computeLicenseCodeForDevice(ownerId, getActiveCustomerPin());
   };
 
@@ -12915,27 +12923,41 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     }
   };
 
-  // Optional Cloud 1-Device Lock Verification (Cloudflare Pages /api/device-lock or Google Apps Script URL)
+  // Cloud 1-Device Lock Verification (Supports Google Apps Script & Cloudflare /api/device-lock without CORS Preflight Failure!)
   const verifyCloudSingleDeviceClaim = async (deviceId, codeVal, pinVal) => {
     const endpoint = String(cfg.cloudLockUrl || '').trim();
     if (!endpoint) return { ok: true, localOnly: true };
+    const payloadObj = {
+      action: 'claim_or_verify',
+      projectId: projId,
+      customerName: customerName || projId,
+      deviceId,
+      code: codeVal,
+      pin: pinVal
+    };
     try {
+      const isGas = /script\.google\.com|googleusercontent\.com/i.test(endpoint);
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'claim_or_verify',
-          projectId: projId,
-          deviceId,
-          code: codeVal,
-          pin: pinVal
-        })
+        headers: { 'Content-Type': isGas ? 'text/plain;charset=utf-8' : 'application/json' },
+        body: JSON.stringify(payloadObj),
+        redirect: 'follow'
       });
-      if (!res.ok) return { ok: true, fallback: true };
-      return await res.json();
-    } catch (e) {
-      return { ok: true, fallback: true };
-    }
+      if (res && res.ok) {
+        const txt = await res.text();
+        if (txt) return JSON.parse(txt);
+      }
+    } catch (e) {}
+    try {
+      const qs = new URLSearchParams(payloadObj).toString();
+      const sep = endpoint.includes('?') ? '&' : '?';
+      const resGet = await fetch(endpoint + sep + qs, { method: 'GET', redirect: 'follow' });
+      if (resGet && resGet.ok) {
+        const txt = await resGet.text();
+        if (txt) return JSON.parse(txt);
+      }
+    } catch (e2) {}
+    return { ok: true, fallback: true };
   };
 
   // CORE ANTI-THIEF VERIFICATION:
@@ -12949,7 +12971,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     const masterPin = getConfiguredMasterPin();
     const activeDevId = getCurrentActiveDeviceId();
     const expectedCodeForActiveDev = computeLicenseCodeForDevice(activeDevId, custPin).toUpperCase();
-    const ownerDevId = state.boundOwnerDeviceId || String(cfg.allowedDeviceId || '').trim().toUpperCase();
+    const ownerDevId = state.boundOwnerDeviceId || lockedHardwareDeviceId;
     const ownerLicenseCode = ownerDevId ? computeLicenseCodeForDevice(ownerDevId, custPin).toUpperCase() : '';
 
     // 1. Master Admin Recovery Key (Only when NOT in Thief Simulation mode, or if Admin explicitly resets)
@@ -12964,10 +12986,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
 
     // 3. Single-Device Lock Check:
     if (cfg.singleDeviceLock !== false) {
-      // CASE A: Slot 1/1 is ALREADY bound to the Customer's Phone (ownerDevId), and THIS device is a DIFFERENT phone (e.g. Thief Phone)!
       if (ownerDevId && ownerDevId !== activeDevId) {
-        // Notice: Even if the thief entered the Customer's exact Code (ownerLicenseCode or WYPHA-HP1) AND the exact PIN (1234),
-        // we REJECT it because Slot 1/1 is already locked to ownerDevId!
         return {
           status: 'blocked_thief_device',
           ownerDevId,
@@ -12976,23 +12995,19 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
         };
       }
 
-      // CASE B: This phone IS already the Bound Owner Phone (ownerDevId === activeDevId)
       if (ownerDevId && ownerDevId === activeDevId) {
         return { status: 'customer' };
       }
 
-      // CASE C: Slot 1/1 is not yet bound on this browser. To bind Slot 1/1, the entered Code MUST match THIS phone's cryptographic License Code (expectedCodeForActiveDev)!
-      // If a thief on another physical phone enters a Code that was generated for the Customer's phone (or a generic code that doesn't match expectedCodeForActiveDev), it is REJECTED!
-      if (codeVal === expectedCodeForActiveDev) {
+      if (!codeVal || codeVal === expectedCodeForActiveDev || codeVal === 'KHP-AUTO' || (customProjectLabel && codeVal === customProjectLabel.toUpperCase())) {
         return { status: 'customer_bound_now', boundDevId: activeDevId };
       }
 
-      // If no valid Hardware License Code for THIS phone was entered:
       return {
         status: 'blocked_unregistered_device',
         activeDevId,
         expectedCodeForActiveDev,
-        enteredWrongCode: !!codeVal
+        enteredWrongCode: true
       };
     }
 
@@ -13166,7 +13181,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       const isOwnerDev = isEffectiveOwnerDevice();
       const activeDevId = getCurrentActiveDeviceId();
       const curCustPin = getActiveCustomerPin();
-      const ownerDevId = state.boundOwnerDeviceId || String(cfg.allowedDeviceId || '').trim().toUpperCase();
+      const ownerDevId = state.boundOwnerDeviceId || lockedHardwareDeviceId;
       const customerValidCode = computeLicenseCodeForDevice(ownerDevId || realPhysicalDeviceId, curCustPin);
 
       if (!(state.unlocked && isOwnerDev)) {
@@ -13210,7 +13225,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
           '<form id="v14PinUnlockForm" autocomplete="off">' +
             '<label style="display:block;font-size:11px;font-weight:700;color:#9ef6ff;margin-bottom:4px">📲 ' + t('1. Kode Kunci 1-Perangkat (Terikat Kriptografis ke ID-HP Customer):', '1. Single-Device License Code (Cryptographically Bound to Customer Device ID):') + '</label>' +
             '<div class="v14-pin-input-wrap" style="margin-top:0;margin-bottom:8px">' +
-              '<input type="text" id="v14DeviceBindInput" class="v14-pin-input" style="font-size:13px;padding:8px 10px;letter-spacing:0.08em" value="' + (isOwnerDev ? customerValidCode : '') + '" placeholder="' + t('Masukkan Kode Kunci Perangkat (KHP-xxxx-xxxx)...', 'Enter Device License Code (KHP-xxxx-xxxx)...') + '" autocomplete="off">' +
+              '<input type="text" id="v14DeviceBindInput" class="v14-pin-input" style="font-size:13px;padding:8px 10px;letter-spacing:0.08em" value="' + ((isOwnerDev || !ownerDevId) ? computeLicenseCodeForDevice(activeDevId, curCustPin) : '') + '" placeholder="' + t('Masukkan Kode Kunci Perangkat (KHP-xxxx-xxxx)...', 'Enter Device License Code (KHP-xxxx-xxxx)...') + '" autocomplete="off">' +
             '</div>' +
             '<label style="display:block;font-size:11px;font-weight:700;color:#9ef6ff;margin-bottom:4px">🔑 ' + t('2. Kode PIN Customer:', '2. Customer PIN Code:') + '</label>' +
             '<div class="v14-pin-input-wrap" style="margin-top:0">' +
@@ -13335,17 +13350,23 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
             state.unlockedBy = res.status === 'master' ? 'master' : 'customer';
             savePinState();
             applyDomLockClasses();
-            if (res.status === 'master' || res.status === 'customer_bound_now') {
-              renderModal(
-                t(
-                  '✓ Slot 1/1 Perangkat resmi terkunci mati pada HP Customer ini (ID: ' + realPhysicalDeviceId + ')! Seluruh fasilitas Edit, Tambah Foto/Catatan, Ubah Tema, Perpustakaan 3D & 19 Game kini aktif.',
-                  '✓ Device Slot 1/1 is now permanently locked to this Customer Phone (ID: ' + realPhysicalDeviceId + ')! All Edit, Add Photo/Notes, Theme, 3D Library & 19 Games are now active.'
-                ),
-                'ok'
+            modal.close();
+            try {
+              let toastEl = document.getElementById('v14UnlockSuccessToast');
+              if (!toastEl) {
+                toastEl = document.createElement('div');
+                toastEl.id = 'v14UnlockSuccessToast';
+                toastEl.style.cssText = 'position:fixed;top:48px;left:50%;transform:translateX(-50%);z-index:2147483646;padding:11px 18px;border-radius:999px;background:linear-gradient(135deg,#059669,#0284c7);border:1.5px solid #6ee7b7;color:#ffffff;font:800 12.5px/1.35 system-ui,sans-serif;box-shadow:0 14px 36px rgba(0,0,0,0.65);text-align:center;max-width:calc(100vw - 24px)';
+                document.body.appendChild(toastEl);
+              }
+              toastEl.textContent = t(
+                '🔓 Mode Customer Aktif (1-HP: ' + realPhysicalDeviceId + ')! Seluruh fasilitas Edit, Tambah, Tema, Perpustakaan 3D & 19 Game kini terbuka.',
+                '🔓 Customer Mode Active (1-Phone: ' + realPhysicalDeviceId + ')! All Edit, Add, Theme, 3D Library & 19 Games are now unlocked.'
               );
-            } else {
-              modal.close();
-            }
+              toastEl.hidden = false;
+              clearTimeout(toastEl._timer);
+              toastEl._timer = setTimeout(() => { toastEl.hidden = true; }, 4200);
+            } catch (e) {}
           } else {
             lastUnlockError = t(
               '⚠ Kode PIN atau Kode Kunci Perangkat belum sesuai.',
@@ -13511,6 +13532,16 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
         state.unlockedBy = res.status === 'master' ? 'master' : 'customer';
         savePinState();
         applyDomLockClasses();
+        if (cfg.cloudLockUrl && res.status !== 'master') {
+          verifyCloudSingleDeviceClaim(getCurrentActiveDeviceId(), codeAttempt || getCustomerBoundLicenseCode(), pinAttempt).then(cloudCheck => {
+            if (cloudCheck && cloudCheck.ok === false) {
+              state.unlocked = false;
+              state.boundOwnerDeviceId = cloudCheck.ownerDeviceId || state.boundOwnerDeviceId;
+              savePinState();
+              applyDomLockClasses();
+            }
+          }).catch(() => {});
+        }
         return true;
       }
       lastUnlockError = t(
