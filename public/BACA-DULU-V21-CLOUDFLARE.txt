@@ -1,0 +1,23 @@
+================================================================================
+WYPHA MAGIC QR STUDIO & MICROSITE — VERSI TERBARU V21 (CLOUDFLARE & ANDROID PWA)
+================================================================================
+PEMBARUAN PADA VERSI V21:
+1. TAMPILAN TOMBOL POJOK KIRI ATAS MICROSITE LEBIH BERSIH & MINIMALIS:
+   - Saat Terkunci (Mode Pengunjung): Tombol pojok kiri atas hanya menampilkan
+     ikon gembok saja (`🔒`) tanpa teks tambahan.
+   - Saat PIN Benar Dimasukkan (Mode Customer): Tombol pojok kiri atas berubah
+     menjadi ikon pensil beserta tulisan kecil `✏️ edit mode` (untuk membuka
+     pengaturan PIN/lisensi) dan tombol kecil `lock` untuk mengunci ulang.
+2. PENGHAPUSAN FITUR SIMULASI HP PENCURI:
+   - Tombol "Uji HP Pencuri (Kedua)" di pojok kiri atas serta seluruh kotak
+     simulasi uji HP pencuri di dalam panel PIN telah dihapus sepenuhnya agar
+     tampilan untuk customer bersih dan profesional.
+   - Sistem proteksi 1-Perangkat (Kriptografi `KHP-XXXX-XXXX` & Cloud Lock
+     Google Sheets) tetap bekerja penuh di latar belakang untuk mengunci akses
+     edit khusus pada 1 HP Utama Customer.
+3. PEMBARUAN LABEL VERSI KE V21 & PERBAIKAN PWA ANDROID:
+   - Seluruh label versi di Studio, Microsite, Manifest PWA, dan Service Worker
+     telah diperbarui ke versi terbaru **V21**.
+   - Ikon aplikasi Android (`icon-192.png` dan `icon-512.png`) siap diinstal
+     penuh sebagai aplikasi mandiri (WebAPK) di Chrome Android.
+================================================================================

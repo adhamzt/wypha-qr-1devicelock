@@ -841,15 +841,13 @@ body.has-theme-image .ending{background:linear-gradient(180deg,color-mix(in srgb
         const ownerCertKey = 'wypha-v201-owner-device-cert:' + projId;
         const prodOwnerCertKey = 'wypha-v201-prod-owner-cert:' + prodType;
         const rawCert = (window.localStorage && (window.localStorage.getItem(ownerCertKey) || window.localStorage.getItem(prodOwnerCertKey))) || (window.sessionStorage && window.sessionStorage.getItem(ownerCertKey));
-        let simulateThief = false;
         const rawAllowed = String(clCfg.allowedDeviceId || '').trim().toUpperCase();
         let boundId = /^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/.test(rawAllowed) ? rawAllowed : '';
         if (rawCert) {
           const pCert = JSON.parse(rawCert);
-          if (pCert?.simulateThiefDevice === true) simulateThief = true;
           if (pCert?.boundOwnerDeviceId) boundId = String(pCert.boundOwnerDeviceId).trim().toUpperCase();
         }
-        if (!simulateThief && physDevId && boundId && boundId === physDevId) {
+        if (physDevId && boundId && boundId === physDevId) {
           isThisPhoneOwner = true;
         }
         if (clCfg.sessionMode !== 'always_locked' && isThisPhoneOwner) {
@@ -12718,10 +12716,8 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
   };
 
   const realPhysicalDeviceId = getOrCreateUniquePhysicalDeviceId();
-  const simulatedThiefDeviceId = 'W20-THIEF-99X2';
 
   // Cryptographic License Code Calculator: Binds 1 Code + 1 PIN mathematically to 1 specific Device ID!
-  // A stolen Code + PIN entered on ANY other phone (different Device ID) mathematically FAILS verification!
   const computeLicenseCodeForDevice = (deviceId, pinStr) => {
     const cleanDev = String(deviceId || '').trim().toUpperCase();
     const cleanPin = String(pinStr || '1234').trim();
@@ -12748,7 +12744,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
 
   const loadOwnerDeviceCert = () => {
     let boundOwnerDeviceId = lockedHardwareDeviceId;
-    let simulateThiefDevice = false;
     try {
       const raw =
         localStorage.getItem(ownerCertKey) ||
@@ -12757,9 +12752,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          if (parsed.simulateThiefDevice === true) {
-            simulateThiefDevice = true;
-          }
           if (typeof parsed.boundOwnerDeviceId === 'string' && isValidHwDeviceId(parsed.boundOwnerDeviceId)) {
             boundOwnerDeviceId = parsed.boundOwnerDeviceId.trim().toUpperCase();
           }
@@ -12770,14 +12762,13 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       const ckOwner = readCookieVal(ownerCookieName);
       if (ckOwner && isValidHwDeviceId(ckOwner)) boundOwnerDeviceId = ckOwner.toUpperCase();
     }
-    return { boundOwnerDeviceId, simulateThiefDevice };
+    return { boundOwnerDeviceId };
   };
 
-  const saveOwnerDeviceCert = (boundDevId, simulateThiefBool = false) => {
+  const saveOwnerDeviceCert = (boundDevId) => {
     const cleanBoundId = String(boundDevId || '').trim().toUpperCase();
     const payload = {
       boundOwnerDeviceId: cleanBoundId,
-      simulateThiefDevice: !!simulateThiefBool,
       updatedAt: Date.now()
     };
     const str = JSON.stringify(payload);
@@ -12820,8 +12811,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       unlocked: false,
       customPin: '',
       unlockedBy: '',
-      boundOwnerDeviceId: cert.boundOwnerDeviceId,
-      simulateThiefDevice: cert.simulateThiefDevice
+      boundOwnerDeviceId: cert.boundOwnerDeviceId
     };
     try {
       const raw =
@@ -12834,13 +12824,11 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
           if (typeof parsed.customPin === 'string' && parsed.customPin.trim()) {
             out.customPin = parsed.customPin.trim();
           }
-          // Migrate existing unlocked Customer phone on this exact hardware seamlessly
           if (!out.boundOwnerDeviceId && parsed.unlocked === true) {
             out.boundOwnerDeviceId = realPhysicalDeviceId;
-            saveOwnerDeviceCert(realPhysicalDeviceId, out.simulateThiefDevice);
+            saveOwnerDeviceCert(realPhysicalDeviceId);
           }
-          const activeDevId = out.simulateThiefDevice ? simulatedThiefDeviceId : realPhysicalDeviceId;
-          const isThisPhoneOwner = !cfg.singleDeviceLock || (out.boundOwnerDeviceId && out.boundOwnerDeviceId === activeDevId);
+          const isThisPhoneOwner = !cfg.singleDeviceLock || (out.boundOwnerDeviceId && out.boundOwnerDeviceId === realPhysicalDeviceId);
           if (cfg.sessionMode !== 'always_locked' && parsed.unlocked === true && isThisPhoneOwner) {
             out.unlocked = true;
             out.unlockedBy = parsed.unlockedBy || 'customer';
@@ -12852,12 +12840,10 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     if (checkAndConsumeUrlOwnerToken(activePin)) {
       if (!out.boundOwnerDeviceId || out.boundOwnerDeviceId === realPhysicalDeviceId) {
         out.boundOwnerDeviceId = realPhysicalDeviceId;
-        out.simulateThiefDevice = false;
-        saveOwnerDeviceCert(realPhysicalDeviceId, false);
+        saveOwnerDeviceCert(realPhysicalDeviceId);
       }
     }
-    const activeDevIdNow = out.simulateThiefDevice ? simulatedThiefDeviceId : realPhysicalDeviceId;
-    const isThisPhoneOwnerNow = !cfg.singleDeviceLock || (out.boundOwnerDeviceId && out.boundOwnerDeviceId === activeDevIdNow);
+    const isThisPhoneOwnerNow = !cfg.singleDeviceLock || (out.boundOwnerDeviceId && out.boundOwnerDeviceId === realPhysicalDeviceId);
     if (!out.unlocked && cfg.sessionMode !== 'always_locked' && readCookieUnlocked() && isThisPhoneOwnerNow) {
       out.unlocked = true;
       out.unlockedBy = 'customer';
@@ -12871,15 +12857,11 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     state.unlocked = true;
   }
 
-  // What is the currently active Device ID? (Real phone ID normally, or Thief Phone ID when testing Thief Simulation!)
-  const getCurrentActiveDeviceId = () => {
-    return state.simulateThiefDevice ? simulatedThiefDeviceId : realPhysicalDeviceId;
-  };
+  const getCurrentActiveDeviceId = () => realPhysicalDeviceId;
 
   // Is the current device the 1 and only Bound Customer Phone?
   const isEffectiveOwnerDevice = () => {
     if (cfg.singleDeviceLock === false) return true;
-    if (state.simulateThiefDevice) return false;
     if (lockedHardwareDeviceId && lockedHardwareDeviceId !== realPhysicalDeviceId) return false;
     return !!state.boundOwnerDeviceId && state.boundOwnerDeviceId === realPhysicalDeviceId;
   };
@@ -12888,14 +12870,13 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     return (state.customPin && state.customPin.trim()) ? state.customPin.trim() : String(cfg.pin || '1234').trim();
   };
 
-  // The Customer's 1-Device License Code (bound mathematically to the Customer's Phone ID!)
   const getCustomerBoundLicenseCode = () => {
     const ownerId = state.boundOwnerDeviceId || lockedHardwareDeviceId || realPhysicalDeviceId;
     return computeLicenseCodeForDevice(ownerId, getActiveCustomerPin());
   };
 
   const savePinState = () => {
-    saveOwnerDeviceCert(state.boundOwnerDeviceId, state.simulateThiefDevice);
+    saveOwnerDeviceCert(state.boundOwnerDeviceId);
     const payload = {
       unlocked: !!state.unlocked,
       customPin: state.customPin || '',
@@ -12960,8 +12941,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     return { ok: true, fallback: true };
   };
 
-  // CORE ANTI-THIEF VERIFICATION:
-  // Even if a Thief steals BOTH the Customer's Code AND the Customer's PIN, entering them on Device #2 is REJECTED!
+  // CORE 1-DEVICE VERIFICATION:
   const checkPinMatch = (rawPinInput, rawCodeInput = '') => {
     const val = String(rawPinInput || '').trim();
     const codeVal = String(rawCodeInput || '').trim().toUpperCase();
@@ -12974,8 +12954,8 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     const ownerDevId = state.boundOwnerDeviceId || lockedHardwareDeviceId;
     const ownerLicenseCode = ownerDevId ? computeLicenseCodeForDevice(ownerDevId, custPin).toUpperCase() : '';
 
-    // 1. Master Admin Recovery Key (Only when NOT in Thief Simulation mode, or if Admin explicitly resets)
-    if (!state.simulateThiefDevice && ((masterPin && val.toUpperCase() === masterPin.toUpperCase()) || val.toUpperCase() === 'WYPHA99')) {
+    // 1. Master Admin Recovery Key
+    if ((masterPin && val.toUpperCase() === masterPin.toUpperCase()) || val.toUpperCase() === 'WYPHA99') {
       return { status: 'master' };
     }
 
@@ -12986,19 +12966,22 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
 
     // 3. Single-Device Lock Check:
     if (cfg.singleDeviceLock !== false) {
+      // CASE A: Slot 1/1 is ALREADY bound to the Customer's Phone (ownerDevId), and THIS device is a DIFFERENT phone!
       if (ownerDevId && ownerDevId !== activeDevId) {
         return {
-          status: 'blocked_thief_device',
+          status: 'blocked_second_device',
           ownerDevId,
           activeDevId,
           enteredSameCode: !!(codeVal && (codeVal === ownerLicenseCode || codeVal === String(cfg.deviceBindCode || '').toUpperCase() || codeVal === 'WYPHA-HP1'))
         };
       }
 
+      // CASE B: This phone IS already the Bound Owner Phone (ownerDevId === activeDevId)
       if (ownerDevId && ownerDevId === activeDevId) {
         return { status: 'customer' };
       }
 
+      // CASE C: Slot 1/1 is not yet bound on this browser.
       if (!codeVal || codeVal === expectedCodeForActiveDev || codeVal === 'KHP-AUTO' || (customProjectLabel && codeVal === customProjectLabel.toUpperCase())) {
         return { status: 'customer_bound_now', boundDevId: activeDevId };
       }
@@ -13056,7 +13039,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     if (!topBar) return;
 
     const isOwnerDev = isEffectiveOwnerDevice();
-    if (!state.unlocked && cfg.hidePinOnOtherDevices && !isOwnerDev && !state.simulateThiefDevice) {
+    if (!state.unlocked && cfg.hidePinOnOtherDevices && !isOwnerDev) {
       topBar.hidden = true;
       return;
     }
@@ -13066,56 +13049,24 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
 
     if (!(state.unlocked && isOwnerDev)) {
       topBar.innerHTML =
-        '<button type="button" class="v14-mini-pin-btn" data-v14-open-pin title="' +
-        t(
-          isOwnerDev
-            ? '✏️ HP Utama Customer (' + realPhysicalDeviceId + ') — Klik untuk Buka dengan PIN'
-            : '🔒 Mode Hanya Lihat (Perangkat Lain) — Walaupun Punya Kode & PIN, Hanya 1 HP Utama Customer yang Bisa Edit',
-          isOwnerDev
-            ? '✏️ Primary Customer Phone (' + realPhysicalDeviceId + ') — Tap to Unlock with PIN'
-            : '🔒 View-Only Mode (Other Device) — Even with Code & PIN, Only the 1 Primary Customer Phone Can Edit'
-        ) +
-        '">' +
-          '<span class="v14-mini-dot" aria-hidden="true"></span>' +
-          '<span>' + (isOwnerDev ? '🔑 PIN' : (state.simulateThiefDevice ? '🕵️ ' + t('Mode HP Pencuri (Read-Only)', 'Thief Phone Mode (Read-Only)') : '🔒 ' + t('Mode Lihat / Aktivasi 1-HP', 'View Only / 1-Phone Lock'))) + '</span>' +
-        '</button>' +
-        (state.simulateThiefDevice
-          ? '<button type="button" class="v14-mini-pin-btn is-active-customer" data-v14-exit-sim title="' +
-            t('Kembali ke Layar HP Utama Customer', 'Return to Primary Customer Phone') +
-            '" style="padding:3px 8px;font-size:9.5px">' +
-              '<span>📱 ' + t('Kembali ke HP Customer', 'Back to Customer Phone') + '</span>' +
-            '</button>'
-          : '');
+        '<button type="button" class="v14-mini-pin-btn" data-v14-open-pin aria-label="Buka Kunci PIN" title="' +
+        t('Buka Kunci PIN', 'Unlock PIN') +
+        '" style="padding:4px 7px;font-size:12px;line-height:1;justify-content:center">' +
+          '<span aria-hidden="true">🔒</span>' +
+        '</button>';
       topBar.querySelector('[data-v14-open-pin]').onclick = () => openPinModal();
-      const exitBtn = topBar.querySelector('[data-v14-exit-sim]');
-      if (exitBtn) {
-        exitBtn.onclick = e => {
-          e.stopPropagation();
-          state.simulateThiefDevice = false;
-          state.boundOwnerDeviceId = realPhysicalDeviceId;
-          state.unlocked = true;
-          state.unlockedBy = 'customer';
-          savePinState();
-          applyDomLockClasses();
-        };
-      }
     } else {
       topBar.innerHTML =
         '<button type="button" class="v14-mini-pin-btn is-active-customer" data-v14-open-pin title="' +
-        t('📱 Terkunci Eksklusif di 1 HP Customer Ini (' + realPhysicalDeviceId + ')', '📱 Exclusively Locked to This 1 Customer Phone (' + realPhysicalDeviceId + ')') +
-        '">' +
-          '<span class="v14-mini-dot" aria-hidden="true"></span>' +
-          '<span>📱 1-HP Aktif</span>' +
+        t('Edit Mode & Pengaturan PIN (' + realPhysicalDeviceId + ')', 'Edit Mode & PIN Settings (' + realPhysicalDeviceId + ')') +
+        '" style="padding:3px 8px;font-size:9.5px;gap:4px">' +
+          '<span aria-hidden="true">✏️</span>' +
+          '<span style="font-size:9.5px;text-transform:lowercase">edit mode</span>' +
         '</button>' +
         '<button type="button" class="v14-mini-pin-btn is-lock-now" data-v14-lock-now title="' +
-        t('Kunci kembali ke Mode Pengunjung (Hanya Lihat)', 'Lock back to Visitor Mode (View Only)') +
-        '">' +
-          '<span>🔒 ' + t('Kunci', 'Lock') + '</span>' +
-        '</button>' +
-        '<button type="button" class="v14-mini-pin-btn is-lock-now" data-v14-sim-thief title="' +
-        t('Uji Simulasi HP Pencuri yang Punya Kode & PIN Sama (Buktikan Kode & PIN Ditolak di HP ke-2!)', 'Simulate Thief Phone with Exact Same Code & PIN (Verify Rejection on 2nd Phone!)') +
-        '" style="border-color:rgba(251,191,36,.55);color:#fde68a;background:rgba(245,158,11,.16)">' +
-          '<span>🕵️ ' + t('Uji HP Pencuri (Kode+PIN Sama)', 'Test Thief Phone') + '</span>' +
+        t('Kunci Ulang Microsite', 'Lock Microsite') +
+        '" style="padding:3px 8px;font-size:9.5px">' +
+          '<span style="font-size:9.5px;text-transform:lowercase">lock</span>' +
         '</button>';
       topBar.querySelector('[data-v14-open-pin]').onclick = () => openPinModal();
       topBar.querySelector('[data-v14-lock-now]').onclick = e => {
@@ -13124,16 +13075,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
         state.unlockedBy = '';
         savePinState();
         applyDomLockClasses();
-      };
-      topBar.querySelector('[data-v14-sim-thief]').onclick = e => {
-        e.stopPropagation();
-        state.boundOwnerDeviceId = realPhysicalDeviceId;
-        state.unlocked = false;
-        state.unlockedBy = '';
-        state.simulateThiefDevice = true;
-        savePinState();
-        applyDomLockClasses();
-        openPinModal();
       };
     }
   };
@@ -13177,7 +13118,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     }
 
     const renderModal = (flashMsg = '', flashType = '') => {
-      const hintTxt = lang() === 'en' ? (cfg.hintEn || cfg.hintId) : (cfg.hintId || cfg.hintEn);
       const isOwnerDev = isEffectiveOwnerDevice();
       const activeDevId = getCurrentActiveDeviceId();
       const curCustPin = getActiveCustomerPin();
@@ -13187,43 +13127,30 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       if (!(state.unlocked && isOwnerDev)) {
         modal.innerHTML =
           '<div class="v14-modal-head">' +
-            '<strong>' + (isOwnerDev ? '🔑 ' + t('VERIFIKASI 1 PERANGKAT CUSTOMER', '1-DEVICE CUSTOMER VERIFICATION') : '🛡️ ' + t('PROTEKSI 1 PERANGKAT (ANTI-PENCURIAN KODE & PIN)', '1-DEVICE ANTI-THEFT CODE & PIN LOCK')) + '</strong>' +
+            '<strong>' + (isOwnerDev ? '🔑 ' + t('VERIFIKASI 1 PERANGKAT CUSTOMER', '1-DEVICE CUSTOMER VERIFICATION') : '🔒 ' + t('AKTIVASI & KUNCI LISENSI 1 PERANGKAT', '1-DEVICE LICENSE ACTIVATION & LOCK')) + '</strong>' +
             '<button type="button" class="v14-modal-close" data-v14-close aria-label="Tutup">×</button>' +
           '</div>' +
-          '<div style="margin-bottom:10px;padding:10px 12px;border-radius:12px;background:' + (isOwnerDev ? 'rgba(16,185,129,0.14);border:1px solid rgba(52,211,153,0.45);color:#bbf7d0' : 'rgba(244,63,94,0.16);border:1px solid rgba(251,113,133,0.55);color:#fecdd3') + ';font-size:11.5px;line-height:1.45">' +
+          '<div style="margin-bottom:10px;padding:10px 12px;border-radius:12px;background:' + (isOwnerDev ? 'rgba(16,185,129,0.14);border:1px solid rgba(52,211,153,0.45);color:#bbf7d0' : 'rgba(14,34,64,0.85);border:1px solid rgba(110,243,255,0.35);color:#dbeafe') + ';font-size:11.5px;line-height:1.45">' +
             (isOwnerDev
               ? '<strong>📱 ' + t('Status Kuota Perangkat: 1/1 Terikat Resmi ke HP Ini (' + activeDevId + ')', 'Device Slot: 1/1 Officially Bound to This Phone (' + activeDevId + ')') + '</strong><br>' +
                 t(
-                  'Perangkat ini adalah HP Utama Customer yang sah. Masukkan PIN Anda di bawah untuk membuka fasilitas Edit, Tambah Foto/Catatan, Ubah Tema, Buka Perpustakaan 3D & 19 Game.',
-                  'This device is the verified Primary Customer Phone. Enter your PIN below to unlock Edit, Add Photo/Notes, Change Theme, 3D Library & 19 Games.'
+                  'Perangkat ini adalah HP Utama Customer yang sah. Masukkan PIN Anda di bawah untuk membuka Edit Mode, Tambah Foto/Catatan, Ubah Tema, Buka Perpustakaan 3D & 19 Game.',
+                  'This device is the verified Primary Customer Phone. Enter your PIN below to unlock Edit Mode, Add Photo/Notes, Change Theme, 3D Library & 19 Games.'
                 )
               : (ownerDevId && ownerDevId !== activeDevId
-                  ? '<strong>⛔ ' + t('KUOTA 1 PERANGKAT SUDAH PENUH! (Terikat Mati di ID: ' + ownerDevId + ')', '1-DEVICE QUOTA FULL! (Permanently Bound to ID: ' + ownerDevId + ')') + '</strong><br>' +
+                  ? '<strong>⛔ ' + t('KUOTA 1 PERANGKAT SUDAH TERKUNCI (ID: ' + ownerDevId + ')', '1-DEVICE QUOTA LOCKED (ID: ' + ownerDevId + ')') + '</strong><br>' +
                     t(
-                      'ID Perangkat HP ini adalah <code>' + activeDevId + '</code> (Perangkat ke-2 / HP Lain). Walaupun Anda memiliki atau mencuri <strong>Kode Kunci (' + customerValidCode + ')</strong> dan <strong>PIN (' + curCustPin + ')</strong> yang sama persis milik Customer, sistem kriptografi menolak perangkat ke-2 sehingga HP ini HANYA BISA MELIHAT isi microsite saja!',
-                      'This device ID is <code>' + activeDevId + '</code> (2nd Device / Other Phone). Even if you have or stole the exact same <strong>License Code (' + customerValidCode + ')</strong> and <strong>PIN (' + curCustPin + ')</strong>, the cryptographic lock rejects a 2nd device so this phone is strictly VIEW-ONLY!'
+                      'ID Perangkat HP ini adalah <code>' + activeDevId + '</code>. Lisensi microsite ini sudah terikat pada 1 HP Utama Customer sehingga perangkat lain hanya berada dalam Mode Lihat (Read-Only).',
+                      'This device ID is <code>' + activeDevId + '</code>. This microsite license is already bound to the 1 Primary Customer Phone, so other devices are in View-Only Mode.'
                     )
-                  : '<strong>📱 ' + t('ID Perangkat HP Ini: ' + activeDevId + ' (Belum Terikat)', 'This Phone Device ID: ' + activeDevId + ' (Unbound)') + '</strong><br>' +
+                  : '<strong>📱 ' + t('ID Perangkat HP Ini: ' + activeDevId, 'This Phone Device ID: ' + activeDevId) + '</strong><br>' +
                     t(
-                      'Hanya 1 perangkat yang dapat menggunakan Kode Kunci Kriptografis & PIN untuk membuka Edit, Tambah, Tema, Perpustakaan & Game. Kode Kunci yang dihitung untuk HP Customer tidak akan berlaku di HP pencuri/lain.',
-                      'Only 1 device can use the Cryptographic License Code & PIN to unlock Edit, Add, Theme, Library & Games. A License Code generated for the Customer phone will never work on a thief’s phone.'
+                      'Masukkan Kode Kunci 1-Perangkat dan PIN Customer di bawah untuk membuka Edit Mode, Tambah Data, Tema, Perpustakaan 3D & 19 Game di HP ini.',
+                      'Enter your 1-Device License Code and Customer PIN below to unlock Edit Mode, Add Data, Theme, 3D Library & 19 Games on this phone.'
                     ))) +
           '</div>' +
-          (state.simulateThiefDevice
-            ? '<div style="margin-bottom:10px;padding:9px 11px;border-radius:12px;background:rgba(245,158,11,0.18);border:1px dashed #fbbf24;font-size:11.5px;color:#fde68a;display:grid;gap:7px">' +
-                '<div>🕵️ <strong>' + t('Uji Coba Simulasi Pencuri (Perangkat ke-2 · ID: ' + simulatedThiefDeviceId + '):', 'Thief Simulation Test (2nd Device · ID: ' + simulatedThiefDeviceId + '):') + '</strong><br>' +
-                t(
-                  'Misalkan pencuri mencuri Kode Kunci Customer (<code>' + customerValidCode + '</code>) DAN mencuri PIN Customer (<code>' + curCustPin + '</code>). Klik tombol di bawah untuk mengisi keduanya lalu tekan Verifikasi — buktikan bahwa HP pencuri TETAP DITOLAK!',
-                  'Suppose a thief stole the Customer License Code (<code>' + customerValidCode + '</code>) AND Customer PIN (<code>' + curCustPin + '</code>). Tap below to auto-fill both and tap Verify — see for yourself that the thief’s phone is STILL REJECTED!'
-                ) + '</div>' +
-                '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-                  '<button type="button" class="v14-key-btn" id="v14AutoFillStolenCredsBtn" style="flex:1;padding:6px 10px;font-size:11px;background:rgba(244,63,94,0.28);border-color:#fb7185;color:#ffe4e6">🧪 ' + t('Isi Kode & PIN Curian (' + customerValidCode + ' + ' + curCustPin + ') & Uji Tolak', 'Fill Stolen Code & PIN & Test Rejection') + '</button>' +
-                  '<button type="button" class="v14-key-btn" id="v14ExitSimOtherBtn" style="padding:6px 10px;font-size:11px;background:rgba(16,185,129,0.28);border-color:#34d399;color:#ecfdf5">📱 ' + t('Kembali ke HP Customer', 'Return to Customer Phone') + '</button>' +
-                '</div>' +
-              '</div>'
-            : '') +
           '<form id="v14PinUnlockForm" autocomplete="off">' +
-            '<label style="display:block;font-size:11px;font-weight:700;color:#9ef6ff;margin-bottom:4px">📲 ' + t('1. Kode Kunci 1-Perangkat (Terikat Kriptografis ke ID-HP Customer):', '1. Single-Device License Code (Cryptographically Bound to Customer Device ID):') + '</label>' +
+            '<label style="display:block;font-size:11px;font-weight:700;color:#9ef6ff;margin-bottom:4px">📲 ' + t('1. Kode Kunci 1-Perangkat:', '1. Single-Device License Code:') + '</label>' +
             '<div class="v14-pin-input-wrap" style="margin-top:0;margin-bottom:8px">' +
               '<input type="text" id="v14DeviceBindInput" class="v14-pin-input" style="font-size:13px;padding:8px 10px;letter-spacing:0.08em" value="' + ((isOwnerDev || !ownerDevId) ? computeLicenseCodeForDevice(activeDevId, curCustPin) : '') + '" placeholder="' + t('Masukkan Kode Kunci Perangkat (KHP-xxxx-xxxx)...', 'Enter Device License Code (KHP-xxxx-xxxx)...') + '" autocomplete="off">' +
             '</div>' +
@@ -13237,7 +13164,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
                 `<button type="button" class="v14-key-btn" data-v14-key="${k}">${k}</button>`
               ).join('') +
             '</div>' +
-            '<button type="submit" class="v14-submit-btn">🔓 ' + t('Verifikasi Kode & PIN di Perangkat Ini', 'Verify Code & PIN on This Device') + '</button>' +
+            '<button type="submit" class="v14-submit-btn">🔓 ' + t('Verifikasi Kode & PIN', 'Verify Code & PIN') + '</button>' +
           '</form>' +
           (flashMsg ? `<div class="v14-status-msg ${flashType === 'ok' ? 'is-ok' : 'is-err'}">${flashMsg}</div>` : '') +
           (!isOwnerDev && !ownerDevId
@@ -13245,8 +13172,8 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
                 '<strong style="display:block;color:#7dd3fc;margin-bottom:4px">📱 ' + t('Aktivasi Pertama HP Customer (' + activeDevId + '):', 'First-Time Customer Phone Activation (' + activeDevId + '):') + '</strong>' +
                 '<div style="margin-bottom:6px;color:#dbeafe">' +
                   t(
-                    'Kode Kunci Kriptografis yang sah khusus untuk ID Perangkat HP ini (<code>' + activeDevId + '</code>) adalah: <code style="padding:2px 6px;border-radius:6px;background:rgba(16,185,129,0.2);color:#a7f3d0;font-weight:800">' + computeLicenseCodeForDevice(activeDevId, curCustPin) + '</code> (Tidak akan berlaku di HP lain!).',
-                    'The valid Cryptographic License Code exclusively for this Phone ID (<code>' + activeDevId + '</code>) is: <code style="padding:2px 6px;border-radius:6px;background:rgba(16,185,129,0.2);color:#a7f3d0;font-weight:800">' + computeLicenseCodeForDevice(activeDevId, curCustPin) + '</code> (Will never work on any other phone!).'
+                    'Kode Kunci Kriptografis khusus untuk ID Perangkat HP ini (<code>' + activeDevId + '</code>): <code style="padding:2px 6px;border-radius:6px;background:rgba(16,185,129,0.2);color:#a7f3d0;font-weight:800">' + computeLicenseCodeForDevice(activeDevId, curCustPin) + '</code>.',
+                    'Cryptographic License Code exclusively for this Phone ID (<code>' + activeDevId + '</code>): <code style="padding:2px 6px;border-radius:6px;background:rgba(16,185,129,0.2);color:#a7f3d0;font-weight:800">' + computeLicenseCodeForDevice(activeDevId, curCustPin) + '</code>.'
                   ) +
                 '</div>' +
                 '<button type="button" class="v14-key-btn" id="v14ClaimFirstDeviceBtn" style="width:100%;padding:7px 10px;font-size:11.5px;background:linear-gradient(135deg,#0284c7,#7c3aed);border-color:#7dd3fc;color:#fff">📲 ' + t('Isi Kode Kunci HP Ini (' + computeLicenseCodeForDevice(activeDevId, curCustPin) + ') untuk Mengikat Slot 1/1', 'Fill This Phone’s License Code to Lock Slot 1/1') + '</button>' +
@@ -13257,37 +13184,12 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
         const inp = modal.querySelector('#v14PinInputField');
         const bindInp = modal.querySelector('#v14DeviceBindInput');
 
-        const autoFillStolenBtn = modal.querySelector('#v14AutoFillStolenCredsBtn');
-        if (autoFillStolenBtn) {
-          autoFillStolenBtn.onclick = () => {
-            if (bindInp) bindInp.value = customerValidCode;
-            if (inp) {
-              inp.type = 'text';
-              inp.value = curCustPin;
-            }
-            handleVerify();
-          };
-        }
-
         const claimFirstBtn = modal.querySelector('#v14ClaimFirstDeviceBtn');
         if (claimFirstBtn) {
           claimFirstBtn.onclick = () => {
             if (bindInp) bindInp.value = computeLicenseCodeForDevice(activeDevId, curCustPin);
             if (inp && !inp.value.trim()) inp.value = curCustPin;
             inp?.focus();
-          };
-        }
-
-        const exitSimBtn = modal.querySelector('#v14ExitSimOtherBtn');
-        if (exitSimBtn) {
-          exitSimBtn.onclick = () => {
-            state.simulateThiefDevice = false;
-            state.boundOwnerDeviceId = realPhysicalDeviceId;
-            state.unlocked = true;
-            state.unlockedBy = 'customer';
-            savePinState();
-            applyDomLockClasses();
-            renderModal(t('✓ Kembali ke HP Utama Customer (' + realPhysicalDeviceId + ')! Seluruh fasilitas Edit, Tambah, Tema, Perpustakaan & Game kembali aktif.', '✓ Returned to Primary Customer Phone (' + realPhysicalDeviceId + ')! All Edit, Add, Theme, Library & Game facilities are active again.'), 'ok');
           };
         }
 
@@ -13312,10 +13214,10 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
           const pinAttempt = (inp?.value || '').trim();
           const res = checkPinMatch(pinAttempt, codeAttempt);
 
-          if (res.status === 'blocked_thief_device') {
+          if (res.status === 'blocked_second_device') {
             lastUnlockError = t(
-              '⛔ PENCURIAN KODE & PIN TERDETEKSI — AKSES DITOLAK DI PERANGKAT KE-2! Walaupun Anda memasukkan Kode Kunci (' + (codeAttempt || customerValidCode) + ') dan PIN (' + curCustPin + ') yang benar, pasangan Kode & PIN tersebut sudah terkunci mati pada 1 HP Utama Customer (ID: ' + res.ownerDevId + ') dan TIDAK BERLAKU di perangkat ini (ID: ' + res.activeDevId + '). Perangkat ini hanya diizinkan melihat isi microsite (Read-Only)!',
-              '⛔ STOLEN CODE & PIN DETECTED — ACCESS DENIED ON 2ND DEVICE! Even though you entered the Customer’s exact Code and PIN, Slot 1/1 is permanently locked to the Primary Customer Phone (ID: ' + res.ownerDevId + ') and is INVALID on this device (ID: ' + res.activeDevId + '). This device is strictly View-Only!'
+              '⛔ AKSES DITOLAK DI PERANGKAT KE-2! Lisensi 1-Perangkat sudah terikat pada HP Utama Customer (ID: ' + res.ownerDevId + ') dan tidak berlaku di perangkat ini (ID: ' + res.activeDevId + '). Perangkat ini hanya dapat melihat isi microsite (Read-Only).',
+              '⛔ ACCESS DENIED ON 2ND DEVICE! Slot 1/1 is permanently bound to the Primary Customer Phone (ID: ' + res.ownerDevId + ') and is invalid on this device (ID: ' + res.activeDevId + '). This device is View-Only.'
             );
             renderModal(lastUnlockError, 'err');
             return;
@@ -13323,21 +13225,20 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
 
           if (res.status === 'blocked_unregistered_device') {
             lastUnlockError = t(
-              '⛔ KODE KUNCI TIDAK SESUAI DENGAN ID PERANGKAT HP INI (' + res.activeDevId + ')! Kode yang berasal dari HP lain tidak dapat digunakan di perangkat ini. Hanya pemilik Kode Kunci Kriptografis yang cocok dengan ID Perangkat yang dapat membuka akses.',
-              '⛔ LICENSE CODE MISMATCH FOR THIS DEVICE ID (' + res.activeDevId + ')! A code from another phone cannot be used on this device.'
+              '⛔ KODE KUNCI TIDAK SESUAI DENGAN ID PERANGKAT HP INI (' + res.activeDevId + ')! Pastikan Kode Kunci Perangkat sesuai dengan ID Perangkat HP Anda.',
+              '⛔ LICENSE CODE MISMATCH FOR THIS DEVICE ID (' + res.activeDevId + ')!'
             );
             renderModal(lastUnlockError, 'err');
             return;
           }
 
           if (res.status === 'customer' || res.status === 'customer_bound_now' || res.status === 'master') {
-            // Also verify against Cloud 1-Device Lock if configured
             if (cfg.cloudLockUrl && res.status !== 'master') {
               const cloudCheck = await verifyCloudSingleDeviceClaim(activeDevId, codeAttempt, pinAttempt);
               if (cloudCheck && cloudCheck.ok === false) {
                 lastUnlockError = t(
-                  '⛔ CLOUD LOCK 1-PERANGKAT MENOLAK AKSES: Kode & PIN ini sudah diklaim oleh perangkat pertama (' + (cloudCheck.ownerDeviceId || 'HP Customer') + '). Perangkat ke-2 hanya bisa melihat isi microsite!',
-                  '⛔ CLOUD 1-DEVICE LOCK DENIED ACCESS: This Code & PIN is already claimed by the 1st device (' + (cloudCheck.ownerDeviceId || 'Customer Phone') + ').'
+                  '⛔ CLOUD LOCK 1-PERANGKAT MENOLAK AKSES: Lisensi ini sudah diklaim oleh perangkat pertama (' + (cloudCheck.ownerDeviceId || 'HP Customer') + '). Perangkat ke-2 hanya bisa melihat isi microsite!',
+                  '⛔ CLOUD 1-DEVICE LOCK DENIED ACCESS: This license is already claimed by the 1st device (' + (cloudCheck.ownerDeviceId || 'Customer Phone') + ').'
                 );
                 renderModal(lastUnlockError, 'err');
                 return;
@@ -13345,7 +13246,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
             }
             lastUnlockError = '';
             state.boundOwnerDeviceId = realPhysicalDeviceId;
-            state.simulateThiefDevice = false;
             state.unlocked = true;
             state.unlockedBy = res.status === 'master' ? 'master' : 'customer';
             savePinState();
@@ -13360,8 +13260,8 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
                 document.body.appendChild(toastEl);
               }
               toastEl.textContent = t(
-                '🔓 Mode Customer Aktif (1-HP: ' + realPhysicalDeviceId + ')! Seluruh fasilitas Edit, Tambah, Tema, Perpustakaan 3D & 19 Game kini terbuka.',
-                '🔓 Customer Mode Active (1-Phone: ' + realPhysicalDeviceId + ')! All Edit, Add, Theme, 3D Library & 19 Games are now unlocked.'
+                '✏️ Edit Mode Aktif (1-HP: ' + realPhysicalDeviceId + ')! Seluruh fasilitas Edit, Tambah, Tema, Perpustakaan 3D & 19 Game kini terbuka.',
+                '✏️ Edit Mode Active (1-Phone: ' + realPhysicalDeviceId + ')! All Edit, Add, Theme, 3D Library & 19 Games are now unlocked.'
               );
               toastEl.hidden = false;
               clearTimeout(toastEl._timer);
@@ -13384,30 +13284,20 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       } else {
         modal.innerHTML =
           '<div class="v14-modal-head">' +
-            '<strong>📱 ' + t('SLOT 1/1 TERKUNCI DI HP CUSTOMER INI', 'SLOT 1/1 LOCKED TO THIS CUSTOMER PHONE') + '</strong>' +
+            '<strong>✏️ ' + t('EDIT MODE AKTIF · LISENSI 1-HP CUSTOMER', 'EDIT MODE ACTIVE · 1-PHONE CUSTOMER LICENSE') + '</strong>' +
             '<button type="button" class="v14-modal-close" data-v14-close aria-label="Tutup">×</button>' +
           '</div>' +
           (flashMsg ? `<div class="v14-status-msg ${flashType === 'ok' ? 'is-ok' : 'is-err'}" style="margin-bottom:10px">${flashMsg}</div>` : '') +
           '<div style="padding:10px 12px;border-radius:14px;background:rgba(16,185,129,0.14);border:1px solid rgba(78,245,168,0.45);margin-bottom:12px;font-size:12px;color:#d1fae5">' +
-            '<strong>✓ ' + t('Kuota Perangkat: 1/1 Terkunci Mati pada ID-HP: ' + realPhysicalDeviceId, 'Device Quota: 1/1 Locked to Phone ID: ' + realPhysicalDeviceId) + '</strong><br>' +
+            '<strong>✓ ' + t('Kuota Perangkat: 1/1 Terikat Resmi pada ID-HP: ' + realPhysicalDeviceId, 'Device Quota: 1/1 Officially Bound to Phone ID: ' + realPhysicalDeviceId) + '</strong><br>' +
             t(
-              'Kode Kunci Kriptografis (<code>' + customerValidCode + '</code>) dan PIN (<code>' + curCustPin + '</code>) sudah terikat mati ke ID Perangkat HP ini. Sekalipun ada pencuri di HP lain yang mengetahui/mencuri Kode Kunci DAN PIN yang sama persis, di HP pencuri keduanya otomatis DITOLAK!',
-              'The Cryptographic License Code (<code>' + customerValidCode + '</code>) and PIN (<code>' + curCustPin + '</code>) are permanently bound to this Phone ID. Even if a thief on another phone steals BOTH the exact same Code and PIN, they are automatically REJECTED on the thief’s phone!'
+              'Kode Kunci Kriptografis (<code>' + customerValidCode + '</code>) dan PIN Anda aktif di perangkat ini. Anda dapat mengedit isi microsite, mengubah tema, membuka Perpustakaan 3D & 19 Game, atau menekan tombol <strong>lock</strong> di pojok kiri atas untuk mengunci ulang.',
+              'Your Cryptographic License Code (<code>' + customerValidCode + '</code>) and PIN are active on this device. You can edit the microsite, change themes, open the 3D Library & 19 Games, or tap <strong>lock</strong> at the top-left to re-lock.'
             ) +
           '</div>' +
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
-            '<button type="button" class="v14-submit-btn" data-v14-continue style="flex:1">✓ ' + t('Lanjut Kelola Microsite', 'Continue Managing Microsite') + '</button>' +
-            '<button type="button" class="v14-key-btn" data-v14-lock-modal style="border-color:#ff8ab8;color:#ffd0e4;padding:10px 14px">🔒 ' + t('Kunci (Di HP Ini)', 'Lock (On This Phone)') + '</button>' +
-          '</div>' +
-          '<div style="margin-bottom:12px;padding:10px 12px;border-radius:12px;background:rgba(245,158,11,0.14);border:1px dashed rgba(251,191,36,0.55);font-size:11.5px;color:#fde68a">' +
-            '<strong style="display:block;margin-bottom:4px">🕵️ ' + t('Buktikan Anti-Pencurian Kode & PIN di HP ke-2:', 'Verify Anti-Theft Code & PIN Rejection on a 2nd Phone:') + '</strong>' +
-            '<p style="margin:0 0 8px;color:#fef3c7;line-height:1.4">' +
-              t(
-                'Klik tombol di bawah untuk mensimulasikan HP Pencuri (Perangkat ke-2) yang berhasil mencuri Kode Kunci (<code>' + customerValidCode + '</code>) sekaligus PIN (<code>' + curCustPin + '</code>), lalu buktikan bahwa keduanya DITOLAK di HP ke-2:',
-                'Tap below to simulate a Thief Phone (2nd Device) that stole BOTH the License Code (<code>' + customerValidCode + '</code>) and PIN (<code>' + curCustPin + '</code>), and verify that both are REJECTED on the 2nd phone:'
-              ) +
-            '</p>' +
-            '<button type="button" class="v14-key-btn" id="v14SimulateOtherPhoneBtn" style="width:100%;padding:8px 12px;background:rgba(244,63,94,0.28);border-color:#fb7185;color:#fff">🕵️ ' + t('Uji Simulasi HP Pencuri (Masukkan Kode & PIN yang Sama)', 'Simulate Thief Phone (Try Entering Exact Same Code & PIN)') + '</button>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
+            '<button type="button" class="v14-submit-btn" data-v14-continue style="flex:1">✓ ' + t('Lanjut Edit Microsite', 'Continue Editing Microsite') + '</button>' +
+            '<button type="button" class="v14-key-btn" data-v14-lock-modal style="border-color:#ff8ab8;color:#ffd0e4;padding:10px 14px">🔒 ' + t('Lock (Kunci Ulang)', 'Lock Now') + '</button>' +
           '</div>' +
           '<div style="padding:12px;border-radius:14px;background:rgba(8,20,42,0.88);border:1px solid rgba(110,243,255,0.3)">' +
             '<strong style="display:block;font-size:12px;color:#8ef5ff;margin-bottom:6px">✏️ ' + t('Informasi Lisensi 1-HP & Pengaturan PIN', '1-Phone License Info & PIN Settings') + '</strong>' +
@@ -13436,21 +13326,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
           savePinState();
           applyDomLockClasses();
           modal.close();
-        };
-        modal.querySelector('#v14SimulateOtherPhoneBtn').onclick = () => {
-          state.boundOwnerDeviceId = realPhysicalDeviceId;
-          state.unlocked = false;
-          state.unlockedBy = '';
-          state.simulateThiefDevice = true;
-          savePinState();
-          applyDomLockClasses();
-          renderModal(
-            t(
-              '🕵️ Simulasi HP Pencuri Aktif (ID Perangkat ke-2: ' + simulatedThiefDeviceId + ')! Klik tombol merah "🧪 Isi Kode & PIN Curian" di atas atau ketikkan Kode (' + customerValidCode + ') dan PIN (' + curCustPin + ') yang sama — sistem akan MENOLAKNYA!',
-              '🕵️ Thief Phone Simulation Active (2nd Device ID: ' + simulatedThiefDeviceId + ')! Tap the red button above or type the exact same Code (' + customerValidCode + ') and PIN (' + curCustPin + ') — the system will REJECT them!'
-            ),
-            'err'
-          );
         };
         modal.querySelector('#v14SaveNewPinBtn').onclick = () => {
           const nextPin = (modal.querySelector('#v14NewCustPinInput')?.value || '').trim();
@@ -13510,10 +13385,10 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     computeLicenseForDevice: (devId, pinStr) => computeLicenseCodeForDevice(devId, pinStr || getActiveCustomerPin()),
     unlock: (pinAttempt, codeAttempt = '') => {
       const res = checkPinMatch(pinAttempt, codeAttempt);
-      if (res.status === 'blocked_thief_device') {
+      if (res.status === 'blocked_second_device') {
         lastUnlockError = t(
-          '⛔ AKSES DITOLAK DI PERANGKAT KE-2 (' + res.activeDevId + '): Walaupun Kode & PIN yang dimasukkan sama persis, lisensi 1-Perangkat sudah terkunci mati pada HP Utama Customer (' + res.ownerDevId + ')! Di HP ini Anda hanya bisa melihat isi microsite (Read-Only).',
-          '⛔ ACCESS DENIED ON 2ND DEVICE (' + res.activeDevId + '): Even with the exact same Code & PIN, the 1-Device license is permanently locked to the Primary Customer Phone (' + res.ownerDevId + ')!'
+          '⛔ AKSES DITOLAK DI PERANGKAT KE-2 (' + res.activeDevId + '): Lisensi 1-Perangkat sudah terkunci pada HP Utama Customer (' + res.ownerDevId + ')! Di HP ini Anda hanya bisa melihat isi microsite (Read-Only).',
+          '⛔ ACCESS DENIED ON 2ND DEVICE (' + res.activeDevId + '): The 1-Device license is permanently locked to the Primary Customer Phone (' + res.ownerDevId + ')!'
         );
         return false;
       }
@@ -13527,7 +13402,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       if (res.status === 'customer' || res.status === 'customer_bound_now' || res.status === 'master') {
         lastUnlockError = '';
         state.boundOwnerDeviceId = realPhysicalDeviceId;
-        state.simulateThiefDevice = false;
         state.unlocked = true;
         state.unlockedBy = res.status === 'master' ? 'master' : 'customer';
         savePinState();
@@ -13550,16 +13424,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       );
       return false;
     },
-    simulateOtherPhoneMode: (simBool = true) => {
-      state.boundOwnerDeviceId = realPhysicalDeviceId;
-      state.simulateThiefDevice = !!simBool;
-      if (simBool) {
-        state.unlocked = false;
-        state.unlockedBy = '';
-      }
-      savePinState();
-      applyDomLockClasses();
-    },
     lock: () => {
       state.unlocked = false;
       state.unlockedBy = '';
@@ -13569,7 +13433,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     setPreviewMode: unlockedBool => {
       if (unlockedBool) {
         state.boundOwnerDeviceId = realPhysicalDeviceId;
-        state.simulateThiefDevice = false;
       }
       state.unlocked = !!unlockedBool;
       state.unlockedBy = unlockedBool ? 'preview' : '';
@@ -13579,7 +13442,6 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       const fresh = loadPinState();
       if (fresh.customPin) state.customPin = fresh.customPin;
       state.boundOwnerDeviceId = fresh.boundOwnerDeviceId;
-      state.simulateThiefDevice = fresh.simulateThiefDevice;
       if (cfg.sessionMode !== 'always_locked' && fresh.unlocked && isEffectiveOwnerDevice()) {
         state.unlocked = true;
         state.unlockedBy = fresh.unlockedBy || 'customer';
@@ -15813,7 +15675,7 @@ boot().catch(err=>{console.warn('Finance Hub boot fallback:', err);});
       guideBar.innerHTML =
         `<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">` +
           `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">` +
-            `<span style="padding:5px 12px;border-radius:999px;background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.45);color:#7dd3fc;font:800 11px Orbitron,system-ui;letter-spacing:.08em">🏛️ WYPHA EXECUTIVE LIFE OS · V20.1</span>` +
+            `<span style="padding:5px 12px;border-radius:999px;background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.45);color:#7dd3fc;font:800 11px Orbitron,system-ui;letter-spacing:.08em">🏛️ WYPHA EXECUTIVE LIFE OS · V21</span>` +
             `<span style="font:600 12px system-ui;color:#cbd5e1">${t('Pilih Bahasa Antarmuka & Panduan Operasional:', 'Select Interface Language & Operational Guide:')}</span>` +
           `</div>` +
           `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">` +
@@ -15845,7 +15707,7 @@ boot().catch(err=>{console.warn('Finance Hub boot fallback:', err);});
             `</div>` +
             `<div style="padding:11px;border-radius:12px;background:rgba(4,11,26,.82);border:1px solid rgba(56,189,248,.28)">` +
               `<strong style="color:#c084fc;display:block;margin-bottom:4px">4. 📸🎬📚 ${t('Galeri Momen Spesial & Perpustakaan 3D', 'Special Moment Galleries & 3D Virtual Library')}</strong>` +
-              t('Abadikan dokumentasi pada galeri Photo & Video Special Moment, serta tingkatkan kompetensi melalui Perpustakaan Virtual 3D dan E-Raport Evaluasi Pengembangan Diri yang terintegrasi dengan Wypha AI Learning Studio V19.1.', 'Preserve milestones in the Photo & Video Special Moment galleries, and advance your mastery with the 3D Virtual Library and Self-Development e-Report integrated with Wypha AI Learning Studio V19.1.') +
+              t('Abadikan dokumentasi pada galeri Photo & Video Special Moment, serta tingkatkan kompetensi melalui Perpustakaan Virtual 3D dan E-Raport Evaluasi Pengembangan Diri yang terintegrasi dengan Wypha AI Learning Studio V21.', 'Preserve milestones in the Photo & Video Special Moment galleries, and advance your mastery with the 3D Virtual Library and Self-Development e-Report integrated with Wypha AI Learning Studio V21.') +
             `</div>` +
           `</div>` +
         `</details>`;
@@ -16069,7 +15931,7 @@ boot().catch(err=>{console.warn('Finance Hub boot fallback:', err);});
       ctx.fillStyle = '#7dd3fc';
       ctx.font = '700 18px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('WYPHA PERSONAL DIARY & EXECUTIVE LIFE OS · V19', 600, 1418);
+      ctx.fillText('WYPHA PERSONAL DIARY & EXECUTIVE LIFE OS · V21', 600, 1418);
 
       canvas.toBlob(blob => {
         if (!blob) return;
@@ -18012,7 +17874,7 @@ boot().catch(err=>{console.warn('Finance Hub boot fallback:', err);});
   z-index: 2;
 }
 .v142-library-drawer::after {
-  content: "❖ QUANTUM 3D HOLO-ARCHIVE · V19";
+  content: "❖ QUANTUM 3D HOLO-ARCHIVE · V21";
   position: absolute;
   top: 7px;
   right: 18px;
@@ -27827,7 +27689,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
       };
       const pageLinesList = cards.length ? cards.map((c, idx) => {
         const pLines = [
-          `WYPHA VIRTUAL LIBRARY V19 - HALAMAN ${idx + 1} DARI ${cards.length}`,
+          `WYPHA VIRTUAL LIBRARY V21 - HALAMAN ${idx + 1} DARI ${cards.length}`,
           `${title.slice(0, 72)}`,
           `========================================================================`,
           `[ ${String(c.h || ('Bab ' + (idx + 1))).replace(/[^\x20-\x7E]/g, '')} ]`,
@@ -27837,7 +27699,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
           wrapLine(rawL, 76).forEach(wl => pLines.push(wl));
         });
         return pLines.slice(0, 38);
-      }) : [[`WYPHA VIRTUAL LIBRARY V19 - ${title.slice(0, 65)}`]];
+      }) : [[`WYPHA VIRTUAL LIBRARY V21 - ${title.slice(0, 65)}`]];
 
       const fontObjNum = 3;
       const pageObjNums = [];
@@ -28179,8 +28041,8 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
         references: Array.isArray(c.references) ? c.references : (Array.isArray(parsed.references) ? parsed.references : []),
         icon: String(c.icon || '📘'),
         color: String(c.color || '#00d2ff'),
-        badgeId: String(c.badgeId || pages[0]?.badge || 'MODUL INTERAKTIF WYPHA V19.1'),
-        badgeEn: String(c.badgeEn || c.badgeId || 'WYPHA V19.1 INTERACTIVE MODULE'),
+        badgeId: String(c.badgeId || pages[0]?.badge || 'MODUL INTERAKTIF WYPHA V21'),
+        badgeEn: String(c.badgeEn || c.badgeId || 'WYPHA V21 INTERACTIVE MODULE'),
         titleId: String(c.titleId || pages[0]?.heading || 'Modul Pengembangan Diri'),
         titleEn: String(c.titleEn || c.titleId || pages[0]?.heading || 'Self-Development Module'),
         descId: String(c.descId || pages[0]?.body || ''),
@@ -29211,7 +29073,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
           `</div>` +
         `</header>` +
         /* V16 5-Area Workspace Navigation Bar + Source Switcher (Baca Interaktif vs Lihat PDF) */
-        `<nav class="v16-reader-nav-tabs" aria-label="Area Ruang Baca V19">` +
+        `<nav class="v16-reader-nav-tabs" aria-label="Area Ruang Baca V21">` +
           `<div style="display:flex;flex-wrap:wrap;gap:6px;" id="v16WorkspaceTabBtns">` +
             (hasStructured ? `<button type="button" class="v16-tab-btn is-active" data-v16-tab="baca">📖 ${t('1. Baca Interaktif', '1. Structured Read')}</button>` : '') +
             (hasActivities ? `<button type="button" class="v16-tab-btn" data-v16-tab="latihan">🎯 ${t('2. Latihan & Kuis', '2. Interactive Quiz')}</button>` : '') +
@@ -29776,7 +29638,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
 
           ctx.fillStyle = '#7ef6ff';
           ctx.font = '800 13px system-ui, sans-serif';
-          ctx.fillText(lang === 'en' ? `📚 WYPHA 3D VIRTUAL LIBRARY V19 · PAGE ${pageNum} OF ${totalPages}` : `📚 PERPUSTAKAAN VIRTUAL 3D WYPHA V19 · HALAMAN ${pageNum} DARI ${totalPages}`, 46, 56);
+          ctx.fillText(lang === 'en' ? `📚 WYPHA 3D VIRTUAL LIBRARY V21 · PAGE ${pageNum} OF ${totalPages}` : `📚 PERPUSTAKAAN VIRTUAL 3D WYPHA V21 · HALAMAN ${pageNum} DARI ${totalPages}`, 46, 56);
 
           ctx.fillStyle = '#ffffff';
           ctx.font = '800 22px system-ui, sans-serif';
@@ -29848,7 +29710,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
 
           ctx.fillStyle = activeTh.textSub || '#5c7696';
           ctx.font = '700 12px system-ui, sans-serif';
-          ctx.fillText(`WYPHA Virtual Library V19 · ${pdfFileName.slice(0, 40)}`, 46, 876);
+          ctx.fillText(`WYPHA Virtual Library V21 · ${pdfFileName.slice(0, 40)}`, 46, 876);
           ctx.fillText(`Hal ${pageNum} / ${totalPages}`, 560, 876);
           ctx.restore();
         };
@@ -30290,7 +30152,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
               return (
                 `<div class="v19-pin-gate-box" id="v19ExclusivePinGateBox">` +
                   `<div style="font-size:44px;line-height:1;filter:drop-shadow(0 0 16px rgba(0,240,255,.55))">🛡️📚🎮</div>` +
-                  `<div style="display:inline-flex;align-items:center;gap:6px;margin:0 auto;padding:4px 12px;border-radius:999px;background:rgba(255,212,96,.16);border:1px solid #ffd460;color:#ffd460;font:800 10.5px system-ui">🛡️ 1-DEVICE CRYPTOGRAPHIC PIN LOCK · WYPHA V20.1</div>` +
+                  `<div style="display:inline-flex;align-items:center;gap:6px;margin:0 auto;padding:4px 12px;border-radius:999px;background:rgba(255,212,96,.16);border:1px solid #ffd460;color:#ffd460;font:800 10.5px system-ui">🛡️ 1-DEVICE CRYPTOGRAPHIC PIN LOCK · WYPHA V21</div>` +
                   `<h3 style="margin:0;font:900 clamp(17px,4vw,22px)/1.3 Syne,system-ui;color:#fff">${isOwnerPhoneNow ? t('Akses Eksklusif 1 HP Utama Customer (' + activeDevId + ')', 'Exclusive 1 Primary Customer Phone Access (' + activeDevId + ')') : t('⛔ Ditolak di Perangkat Lain (Kuota 1/1 HP Terkunci)', '⛔ Denied on Other Devices (1/1 Phone Slot Locked)')}</h3>` +
                   `<p style="margin:0 auto;max-width:540px;font:500 12.5px/1.55 system-ui;color:#cbe8ff">` +
                     (isOwnerPhoneNow
@@ -30299,7 +30161,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
                           'The 3D Virtual Library & 19 Edu-Games are bound to this Customer phone. Enter your PIN below to unlock:'
                         )
                       : t(
-                          'Fasilitas Buka Perpustakaan Virtual 3D dan Buka 19 Game Edukasi HANYA BERLAKU DI 1 PERANGKAT UTAMA CUSTOMER' + (boundDevId ? ' (ID: ' + boundDevId + ')' : '') + '. Walaupun pencuri/perangkat lain memasukkan Kode Kunci dan PIN yang sama persis, akses tetap ditolak di perangkat ini (' + activeDevId + ').',
+                          'Fasilitas Buka Perpustakaan Virtual 3D dan Buka 19 Game Edukasi HANYA BERLAKU DI 1 PERANGKAT UTAMA CUSTOMER' + (boundDevId ? ' (ID: ' + boundDevId + ')' : '') + '. Perangkat ke-2 hanya diizinkan melihat isi microsite (Read-Only), sehingga akses edit dan wahana ditolak di perangkat ini (' + activeDevId + ').',
                           'Opening the 3D Virtual Library and 19 Edu-Games is ONLY ALLOWED ON THE 1 PRIMARY CUSTOMER DEVICE' + (boundDevId ? ' (ID: ' + boundDevId + ')' : '') + '. Even if a 2nd device enters the exact same Code and PIN, access is denied on this device (' + activeDevId + ').'
                         )) +
                   `</p>` +
@@ -30329,7 +30191,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
             `</div>` +
             `<div class="v142-action-btns v142-mutating-control">` +
               `<button type="button" class="v142-btn primary" id="v142ImportMultiPdfBtn">📥 ${t('＋ Impor Dokumen PDF Literatur (Multi-PDF)', '＋ Import PDF Literature (Multi-PDF)')}</button>` +
-              `<button type="button" class="v142-btn gold" id="v142OpenAiStudioImportBtn">✨ ${t('Integrasi Wypha AI Learning Studio V19.1 (PDF / JSON)', 'Wypha AI Learning Studio V19.1 Integration')}</button>` +
+              `<button type="button" class="v142-btn gold" id="v142OpenAiStudioImportBtn">✨ ${t('Integrasi Wypha AI Learning Studio V21 (PDF / JSON)', 'Wypha AI Learning Studio V21 Integration')}</button>` +
               `<button type="button" class="v142-btn" id="v142AddUrlBookBtn">🔗 ${t('＋ Tambah Literatur / Tautan PDF', '＋ Add Literature / PDF Link')}</button>` +
               (cfg.eduGamesEnabled !== false ? `<button type="button" class="v19-luxury-arena-jump-btn" id="v18JumpEduGameBtn"><div style="display:flex;align-items:center;gap:10px;min-width:0"><span style="font-size:28px;line-height:1;filter:drop-shadow(0 0 10px rgba(255,212,96,.6))">🎮</span><div style="min-width:0"><span class="v19-luxury-arena-jump-title">👑 ${t('ARENA 19 GAME EDUKASI, MENGAJI & MATA PELAJARAN', '19 SCHOOL CURRICULUM & QURAN EDU-GAMES ARENA')}</span><small style="display:block;color:#9ef6ff;font:700 11px system-ui;margin-top:2px">🕌 Mengaji &amp; PAI · 🔢 Matematika &amp; Koding · 🔬 IPA Sains · 🗺️ IPS · 🔤 Bahasa &amp; Seni</small></div></div><span class="v142-summary-pill" style="border-color:#ffd460;color:#ffd460;font-weight:800">✨ ${t('Buka Wahana ▼', 'Open Arena ▼')}</span></button>` : '') +
             `</div>` +
@@ -30637,7 +30499,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
                   /* V19 Quick Feature ON/OFF Switches & Jump Bar (Synced with Studio Settings) */
                   `<div class="v19-feature-toggle-bar v142-mutating-control">` +
                     `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">` +
-                      `<strong style="font:800 11.5px system-ui;color:#00f0ff">⚙️ ${t('Saklar Fitur & Proteksi PIN V19:', 'V19 Features & PIN Lock:')}</strong>` +
+                      `<strong style="font:800 11.5px system-ui;color:#00f0ff">⚙️ ${t('Saklar Fitur & Proteksi PIN V21:', 'V21 Features & PIN Lock:')}</strong>` +
                       `<button type="button" class="v142-comfort-pill ${eg.pinRequiredForAccess !== false ? 'is-active' : ''}" id="v19TogglePinGateBtn" title="${t('Jika ON, pengunjung tanpa PIN tidak bisa membuka Perpustakaan & Edu-Game', 'When ON, visitors without PIN cannot access Library & Edu-Games')}">🔐 ${t('Wajib PIN Pustaka & Game:', 'Require PIN for Library & Games:')} ${eg.pinRequiredForAccess !== false ? 'ON' : 'OFF'}</button>` +
                       `<button type="button" class="v142-btn subtle" id="v19LockNowTestBtn" style="padding:4px 10px;font-size:10.5px;border-color:#f472b6;color:#fbcfe8" title="${t('Kunci microsite sekarang untuk menguji tampilan layar PIN', 'Lock microsite now to test the PIN screen')}">🔒 ${t('Kunci Sekarang (Tes Layar PIN)', 'Lock Now (Test PIN Screen)')}</button>` +
                       `<button type="button" class="v142-comfort-pill ${eg.starRewardEnabled !== false ? 'is-active' : ''}" id="v19ToggleStarRewardBtn">🎁 ${t('Tukar Bintang Hadiah:', 'Star Rewards:')} ${eg.starRewardEnabled !== false ? 'ON' : 'OFF'}</button>` +
@@ -30682,8 +30544,8 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
                         `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(110,243,255,.22);display:grid;gap:10px">` +
                           `<p style="margin:0;font:500 12px/1.55 system-ui;color:#cbe8ff">` +
                             t(
-                              '💡 Fitur Smart Merge V19: Impor file Paket Soal (.json) yang Anda beli/terima untuk menambahkan puluhan hingga ratusan soal latihan baru ke dalam 19 Edu-Game & Mengaji. Soal baru otomatis digabungkan (merge) TANPA menghapus soal lama, langsung tersimpan di HP, dan ikut ter-backup saat Anda menekan tombol Backup!',
-                              '💡 V19 Smart Merge: Import Question Pack (.json) files to add new curriculum or Quran practice questions into any of the 19 Edu-Games without deleting existing questions. All imported packs are saved on your phone and included in backups!'
+                              '💡 Fitur Smart Merge V21: Impor file Paket Soal (.json) yang Anda beli/terima untuk menambahkan puluhan hingga ratusan soal latihan baru ke dalam 19 Edu-Game & Mengaji. Soal baru otomatis digabungkan (merge) TANPA menghapus soal lama, langsung tersimpan di HP, dan ikut ter-backup saat Anda menekan tombol Backup!',
+                              '💡 V21 Smart Merge: Import Question Pack (.json) files to add new curriculum or Quran practice questions into any of the 19 Edu-Games without deleting existing questions. All imported packs are saved on your phone and included in backups!'
                             ) +
                           `</p>` +
                           `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center" class="v142-mutating-control">` +
@@ -31080,7 +30942,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
               (g.totalBooks > 0 ? `<button type="button" class="v142-btn subtle v142-mutating-control" id="v18ClearAllBooksBtn" style="padding:4px 10px;font-size:11px" title="${t('Hapus semua E-Book dari daftar saat ini', 'Clear all E-Books from current list')}">🗑️ ${t('Hapus Semua', 'Clear All')}</button>` : '') +
             `</div>` +
           `</div>` +
-          `<div class="v142-bookshelf-grid">${booksHtml || `<div style="padding:26px 20px;border-radius:20px;border:1.5px dashed rgba(0,240,255,.48);background:radial-gradient(circle at 50% 0%,rgba(0,240,255,.10),rgba(8,18,38,.78));text-align:center;display:grid;gap:10px;box-shadow:inset 0 0 24px rgba(0,240,255,.08)"><div style="font-size:32px;line-height:1;filter:drop-shadow(0 0 12px rgba(0,240,255,.5))">🏛️✨</div><strong style="font-size:15px;letter-spacing:.03em">${t('WYPHA PERPUSTAKAN VIRTUAL 3D Siap Diisi Koleksi E-Book Anda', 'WYPHA 3D VIRTUAL LIBRARY is Ready for Your E-Book Collection')}</strong><span style="font-size:12.5px;opacity:.9;max-width:580px;margin:0 auto;line-height:1.55">${t('Perpustakaan ini sengaja disiapkan bersih (tanpa e-book bawaan/dummy). Klik tombol "📥 ＋ Impor Dokumen PDF Literatur" untuk langsung memilih file PDF dari perangkat Anda, klik "🔗 ＋ Tambah Literatur / Tautan PDF" untuk memasukkan link/file E-Book, atau gunakan "✨ Integrasi Wypha AI Learning Studio V19.1" untuk memuat E-Book Interaktif (.json).', 'This library starts clean (no dummy e-books). Click "Import PDF Literature" to directly choose a PDF file from your device, "Add Literature / PDF Link" to add an E-Book URL or file, or "Wypha AI Learning Studio V19.1 Integration" to load an Interactive E-Book (.json).')}</span></div>`}</div>` +
+          `<div class="v142-bookshelf-grid">${booksHtml || `<div style="padding:26px 20px;border-radius:20px;border:1.5px dashed rgba(0,240,255,.48);background:radial-gradient(circle at 50% 0%,rgba(0,240,255,.10),rgba(8,18,38,.78));text-align:center;display:grid;gap:10px;box-shadow:inset 0 0 24px rgba(0,240,255,.08)"><div style="font-size:32px;line-height:1;filter:drop-shadow(0 0 12px rgba(0,240,255,.5))">🏛️✨</div><strong style="font-size:15px;letter-spacing:.03em">${t('WYPHA PERPUSTAKAN VIRTUAL 3D Siap Diisi Koleksi E-Book Anda', 'WYPHA 3D VIRTUAL LIBRARY is Ready for Your E-Book Collection')}</strong><span style="font-size:12.5px;opacity:.9;max-width:580px;margin:0 auto;line-height:1.55">${t('Perpustakaan ini sengaja disiapkan bersih (tanpa e-book bawaan/dummy). Klik tombol "📥 ＋ Impor Dokumen PDF Literatur" untuk langsung memilih file PDF dari perangkat Anda, klik "🔗 ＋ Tambah Literatur / Tautan PDF" untuk memasukkan link/file E-Book, atau gunakan "✨ Integrasi Wypha AI Learning Studio V21" untuk memuat E-Book Interaktif (.json).', 'This library starts clean (no dummy e-books). Click "Import PDF Literature" to directly choose a PDF file from your device, "Add Literature / PDF Link" to add an E-Book URL or file, or "Wypha AI Learning Studio V21 Integration" to load an Interactive E-Book (.json).')}</span></div>`}</div>` +
           /* Local Device Storage, Backup, Import & Google Drive Sync Bar */
           `<div class="v142-top-bar" style="background:linear-gradient(135deg,rgba(6,18,38,.92),rgba(18,14,42,.92))">` +
             `<div style="text-align:left">` +
@@ -31450,7 +31312,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
         const bonusPack = {
           schema: 'wypha-edugame-question-pack/v1',
           packId: 'bonus-dlc-pack-v19',
-          packTitle: '🌟 Paket Soal Bonus Eksklusif V19 (Sains, Nusantara & Mengaji)',
+          packTitle: '🌟 Paket Soal Bonus Eksklusif V21 (Sains, Nusantara & Mengaji)',
           questions: [
             { gameId: 'science_lab', level: 'all', visual: '🦕 🦴 🌍', promptId: '[Paket DLC] Ilmuwan yang meneliti fosil dinosaurus dan makhluk purba disebut...', choicesId: ['Paleontolog', 'Astronom', 'Meteorolog', 'Arsitek'], ansId: 'Paleontolog', hintId: 'Paleontologi adalah ilmu yang mempelajari kehidupan purba melalui fosil!' },
             { gameId: 'science_lab', level: 'all', visual: '🌡️ 💧 🔥', promptId: '[Paket DLC] Pada tekanan udara normal, air murni mendidih pada suhu berapa derajat Celcius?', choicesId: ['100°C (dan membeku pada suhu 0°C)', '50°C', '25°C', '0°C'], ansId: '100°C (dan membeku pada suhu 0°C)', hintId: 'Titik beku air = 0°C dan titik didih air = 100°C!' },
@@ -31472,8 +31334,8 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
         const stEl = sec.querySelector('#v19PackImportStatus');
         if (stEl) {
           stEl.textContent = res.addedCount > 0
-            ? t(`✓ Paket Bonus V19 (+${res.addedCount} Soal Baru) berhasil digabungkan ke Bank Soal!`, `✓ Bonus V19 Pack (+${res.addedCount} New Questions) merged into your Question Bank!`)
-            : t('ℹ️ Paket Bonus V19 sudah terinstal di Bank Soal Anda!', 'ℹ️ Bonus V19 Pack is already installed in your Question Bank!');
+            ? t(`✓ Paket Bonus V21 (+${res.addedCount} Soal Baru) berhasil digabungkan ke Bank Soal!`, `✓ Bonus V21 Pack (+${res.addedCount} New Questions) merged into your Question Bank!`)
+            : t('ℹ️ Paket Bonus V21 sudah terinstal di Bank Soal Anda!', 'ℹ️ Bonus V21 Pack is already installed in your Question Bank!');
         }
       });
 
@@ -31755,7 +31617,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Kaligrafi-Wypha-V19-${curItem.id}.png`;
+            a.download = `Kaligrafi-Wypha-V21-${curItem.id}.png`;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -31886,7 +31748,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
         multiPdfInput.click();
       });
 
-      // Wypha AI Learning Studio V19.1 Direct Integration Modal (Import PDF, Import JSON, or Paste V19.1 JSON)
+      // Wypha AI Learning Studio V21 Direct Integration Modal (Import PDF, Import JSON, or Paste V19.1 JSON)
       drawer.querySelector('#v142OpenAiStudioImportBtn')?.addEventListener('click', () => {
         let aiModal = document.getElementById('v142AiStudioBridgeModal');
         if (!aiModal) {
@@ -31898,13 +31760,13 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
         }
         aiModal.innerHTML =
           `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">` +
-            `<strong style="font:800 16px Syne,system-ui;color:#8ef5ff">✨ ${t('Integrasi Modul Wypha AI Learning Studio V19.1', 'Wypha AI Learning Studio V19.1 Module Integration')}</strong>` +
+            `<strong style="font:800 16px Syne,system-ui;color:#8ef5ff">✨ ${t('Integrasi Modul Wypha AI Learning Studio V21', 'Wypha AI Learning Studio V21 Module Integration')}</strong>` +
             `<button type="button" class="v142-btn subtle" data-ai-bridge-close>✕ ${t('Tutup', 'Close')}</button>` +
           `</div>` +
           `<p style="margin:0 0 12px;font:500 12px/1.55 system-ui;color:#cbe8ff">` +
             t(
-              'Perpustakaan Virtual 3D ini dirancang kompatibel sepenuhnya dengan seluruh hasil produksi aplikasi Wypha AI Learning Studio V19.1: baik dokumen PDF siap cetak (Direct-to-PDF Mode), berkas cadangan .json, maupun struktur JSON Envelope V19.1.',
-              'This 3D Virtual Library is fully compatible with all outputs generated by Wypha AI Learning Studio V19.1: Direct-to-PDF files (.pdf), .json backup archives, or raw V19.1 JSON Envelopes.'
+              'Perpustakaan Virtual 3D ini dirancang kompatibel sepenuhnya dengan seluruh hasil produksi aplikasi Wypha AI Learning Studio V21: baik dokumen PDF siap cetak (Direct-to-PDF Mode), berkas cadangan .json, maupun struktur JSON Envelope V19.1.',
+              'This 3D Virtual Library is fully compatible with all outputs generated by Wypha AI Learning Studio V21: Direct-to-PDF files (.pdf), .json backup archives, or raw V19.1 JSON Envelopes.'
             ) +
           `</p>` +
           `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">` +
@@ -31912,7 +31774,7 @@ details.v19-eg-fold-item[open] > .v19-eg-fold-body {
             `<button type="button" class="v142-btn gold" data-ai-bridge-json-file>📂 ${t('2. Impor Berkas JSON AI Studio (.json)', '2. Import AI Studio JSON File (.json)')}</button>` +
           `</div>` +
           `<div style="display:grid;gap:6px;margin-bottom:10px">` +
-            `<label style="font:700 11.5px system-ui;color:#ffd460">📋 ${t('Atau Tempelkan (Paste) Kode JSON dari Wypha AI Learning Studio V19.1 Secara Langsung:', 'Or Paste Raw JSON Output from Wypha AI Learning Studio V19.1 Below:')}</label>` +
+            `<label style="font:700 11.5px system-ui;color:#ffd460">📋 ${t('Atau Tempelkan (Paste) Kode JSON dari Wypha AI Learning Studio V21 Secara Langsung:', 'Or Paste Raw JSON Output from Wypha AI Learning Studio V21 Below:')}</label>` +
             `<textarea id="v142AiStudioPasteBox" rows="6" placeholder='{"schemaVersion":"4.0-v18","titleId":"Judul Modul Pengembangan Diri","pages":[...]}' style="width:100%;box-sizing:border-box;border-radius:12px;background:#040a18;color:#8ef5ff;border:1px solid rgba(110,243,255,.4);padding:10px;font:600 11.5px monospace"></textarea>` +
           `</div>` +
           `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">` +

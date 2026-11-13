@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "WYPHA Magic QR Studio V20.1 — Perpustakaan Virtual 3D, 19 Edu-Game Arena & Personal Diary",
-  "short_name": "WYPHA V20",
-  "description": "WYPHA Studio & Perpustakaan Virtual 3D V20.1: 7 Preset E-Book Eksklusif, 19 Wahana Edu-Game & Mengaji, Personal Diary OS, dan Kunci Lisensi 1-Perangkat.",
+  "name": "WYPHA Magic QR Studio V21 — Perpustakaan Virtual 3D, 19 Edu-Game Arena & Personal Diary",
+  "short_name": "WYPHA V21",
+  "description": "WYPHA Studio & Perpustakaan Virtual 3D V21: 7 Preset E-Book Eksklusif, 19 Wahana Edu-Game & Mengaji, Personal Diary OS, dan Kunci Lisensi 1-Perangkat.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
