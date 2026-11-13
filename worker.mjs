@@ -65,6 +65,14 @@ export default {
       });
     }
 
-    return env.ASSETS.fetch(request);
+    const res = await env.ASSETS.fetch(request);
+    if (url.pathname.endsWith('/manifest.webmanifest') || url.pathname.endsWith('/service-worker.js') || url.pathname.endsWith('/icon-192.png') || url.pathname.endsWith('/icon-512.png')) {
+      const headers = new Headers(res.headers);
+      if (url.pathname.endsWith('.webmanifest')) headers.set('Content-Type', 'application/manifest+json; charset=utf-8');
+      if (url.pathname.endsWith('service-worker.js')) headers.set('Content-Type', 'application/javascript; charset=utf-8');
+      headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+    }
+    return res;
   }
 };

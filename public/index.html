@@ -306,7 +306,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--cyan);box-shadow:0 0 
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="WYPHA Magic QR">
+<meta name="apple-mobile-web-app-title" content="WYPHA V20">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
 
 <style id="qfs-project-vault-style">
@@ -2114,7 +2116,7 @@ function suiteToast(message){
 
 var suiteInstallPrompt=null;
 window.addEventListener("beforeinstallprompt",function(event){
- event.preventDefault();suiteInstallPrompt=event;
+ event.preventDefault();suiteInstallPrompt=event;window.__wyphaDeferredInstallPrompt=event;
  var button=suiteEl("installAppBtn"),status=suiteEl("installStatus");if(button)button.textContent="＋ Instal Aplikasi Sekarang";if(status)status.textContent="Aplikasi Android siap dipasang pada perangkat ini."
 });
 window.addEventListener("appinstalled",function(){suiteInstallPrompt=null;var status=suiteEl("installStatus");if(status)status.textContent="WYPHA Magic QR Studio sudah terpasang sebagai aplikasi.";suiteToast("Aplikasi WYPHA berhasil dipasang.")});
@@ -2135,7 +2137,7 @@ function initPwaSuite(){
   install.textContent="✓ Aplikasi Terpasang";if(status)status.textContent="Studio berjalan sebagai aplikasi Android."
  }
  if(location.protocol!=="file:"&&"serviceWorker" in navigator){
-  navigator.serviceWorker.register("./service-worker.js",{updateViaCache:"none"}).then(()=>navigator.serviceWorker.ready).then(function(){if(status)status.textContent="Siap offline. Di Android, tekan Instal di Android atau gunakan menu ⋮ Chrome."}).catch(function(){if(status)status.textContent="Untuk instal Android, gunakan Chrome dan pastikan internet aktif saat pemasangan pertama."})
+  navigator.serviceWorker.register("./service-worker.js",{updateViaCache:"none"}).then(function(reg){try{reg.update()}catch(e){}return navigator.serviceWorker.ready}).then(function(){if(status)status.textContent="Siap offline. Di Android, tekan Instal di Android atau gunakan menu ⋮ Chrome."}).catch(function(){if(status)status.textContent="Untuk instal Android, gunakan Chrome dan pastikan internet aktif saat pemasangan pertama."})
  }
 }
 
@@ -43274,7 +43276,25 @@ function v143MasterHeadBoot(s) {
   const projId = String(s?.productStudio?.id || s?.rareStudio?.customerGallery?.id || prodType || 'wypha');
   const customerLock = v14CustomerLockDefaults(s?.studio126?.holo13?.customerLock);
   const cfg = JSON.stringify({ projectId: projId, productType: prodType, customerLock }).replace(/</g, '\\u003c');
-  return '<script id="wypha-master-persistence-boot">(' + v143MasterBootRuntime.toString() + ')(' + cfg + ');<\/script>';
+  const pwaMeta =
+    '<link rel="manifest" href="./manifest.webmanifest">' +
+    '<meta name="mobile-web-app-capable" content="yes">' +
+    '<meta name="apple-mobile-web-app-capable" content="yes">' +
+    '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">' +
+    '<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">' +
+    '<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">' +
+    '<link rel="apple-touch-icon" href="./icon-192.png">' +
+    '<script id="wypha-customer-pwa-boot">(() => {' +
+      'if (location.protocol === "http:" || location.protocol === "https:") {' +
+        'window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); window.__wyphaDeferredInstallPrompt = e; });' +
+        'if ("serviceWorker" in navigator) {' +
+          'window.addEventListener("load", () => {' +
+            'navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" }).then(r => { try { r.update(); } catch (e) {} }).catch(() => {});' +
+          '});' +
+        '}' +
+      '}' +
+    '})();<\/script>';
+  return pwaMeta + '<script id="wypha-master-persistence-boot">(' + v143MasterBootRuntime.toString() + ')(' + cfg + ');<\/script>';
 }
 
 
@@ -46245,7 +46265,7 @@ finRoot.addEventListener('change',async e=>{
 finRoot.addEventListener('input',e=>{ if(e.target.matches('.mj-debit,.mj-credit'))updateManualBalance(); });
 _q('#quickAddBtn').addEventListener('click',()=>{if(!isFinCustomerUnlocked()){window.__wyphaCustomerLock?.openModal?.();return;}openTransactionModal();}); _q('#fabBtn').addEventListener('click',()=>{if(!isFinCustomerUnlocked()){window.__wyphaCustomerLock?.openModal?.();return;}openTransactionModal();}); _q('#quickReminderBtn').addEventListener('click',()=>{if(!isFinCustomerUnlocked()){window.__wyphaCustomerLock?.openModal?.();return;}openReminderModal();});
 
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;_q('#installBtn')?.classList.remove('hidden');});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;window.__wyphaDeferredInstallPrompt=e;_q('#installBtn')?.classList.remove('hidden');});
 _q('#installBtn').addEventListener('click',async()=>{if(!deferredInstallPrompt)return;deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;_q('#installBtn').classList.add('hidden');});
 
 async function boot(){

@@ -1,4 +1,38 @@
 ================================================================================
+PERBAIKAN INSTALASI APLIKASI ANDROID (PWA / WEBAPK CHROME ANDROID) — V20.1 FIX
+================================================================================
+- PENYEBAB ERROR SEBELUMNYA ("Aplikasi ini tidak dapat diinstal" / hanya muncul
+  "Buat pintasan"):
+  File `icon-192.png` dan `icon-512.png` pada paket sebelumnya mengalami
+  kerusakan header biner PNG (kehilangan byte signature 0x89 dan CRLF), sehingga
+  server pembuat WebAPK Android di Google Chrome gagal memvalidasi ikon aplikasi
+  dan membatalkan instalasi.
+- APA YANG SUDAH DIPERBAIKI DI PAKET INI:
+  1. `public/icon-192.png` (192x192 RGBA PNG) dan `public/icon-512.png`
+     (512x512 RGBA PNG) telah dibuat ulang dari master logo asli WYPHA dengan
+     struktur biner PNG yang 100% valid.
+  2. `public/manifest.webmanifest` telah diperbarui dengan deklarasi ikon `any`
+     dan `maskable` terpisah serta `start_url: "./"` sesuai standar WebAPK
+     Chrome Android terbaru.
+  3. `public/service-worker.js` telah diperbarui ke versi cache baru
+     (`v20-1-valid-pwa-icons-20261113`) dengan flag `cache: 'reload'` agar HP
+     yang sebelumnya sempat menyimpan cache ikon rusak otomatis mengunduh ikon
+     baru begitu halaman dibuka ulang.
+  4. Baik halaman Studio (`index.html`) maupun microsite Customer
+     (`QR-PERSONAL-DIARY-CUSTOMER-V20.html`) kini sudah dilengkapi manifest &
+     service worker sehingga keduanya bisa langsung di-instal sebagai aplikasi
+     Android mandiri.
+
+CARA DEPLOY ULANG & INSTAL DI HP ANDROID:
+1. Upload/push seluruh isi folder ini ke GitHub / Cloudflare Workers Anda
+   (jalankan `npx wrangler deploy` atau biarkan GitHub Actions men-deploy).
+2. Buka link `.workers.dev` Anda di Chrome Android, lalu lakukan **Refresh / Muat
+   Ulang** halaman 1–2 kali (agar Service Worker baru menggantikan cache lama).
+3. Ketuk tombol **"+ Instal di Android"** pada halaman Studio atau buka menu
+   titik tiga Chrome (⋮) -> **"Instal aplikasi"**. Kini opsi **"Instal"** akan
+   aktif dan terpasang penuh sebagai aplikasi di HP Anda!
+
+================================================================================
 PEMBARUAN UTAMA WYPHA STUDIO & MICROSITE V20.1
 (ANTI-PENCURIAN KODE & PIN: 1 KODE + 1 PIN HANYA BISA DI 1 PERANGKAT SAJA!)
 ================================================================================

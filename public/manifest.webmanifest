@@ -1,13 +1,12 @@
 {
   "id": "./",
-  "name": "WYPHA Magic QR Studio V19 — Wypha Perpustakaan Virtual 3D (7 E-Book Eksklusif & 20 Tema Baca), Adaptive Reader & e-Raport Belajar",
-  "short_name": "WYPHA V19",
-  "description": "WYPHA Studio & Perpustakaan Virtual 3D V19: 7 Preset E-Book Eksklusif Keluarga Wypha, 20 Tema Tampilan E-Book Nyaman di Mata, Kebebasan Menambah/Menghapus E-Book, Daftar Judul Lipat Rapi, Adaptive Reader, dan 10 Aktivitas Interaktif.",
-  "start_url": "./index.html",
+  "name": "WYPHA Magic QR Studio V20.1 — Perpustakaan Virtual 3D, 19 Edu-Game Arena & Personal Diary",
+  "short_name": "WYPHA V20",
+  "description": "WYPHA Studio & Perpustakaan Virtual 3D V20.1: 7 Preset E-Book Eksklusif, 19 Wahana Edu-Game & Mengaji, Personal Diary OS, dan Kunci Lisensi 1-Perangkat.",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "display_override": [
-    "window-controls-overlay",
     "standalone",
     "minimal-ui"
   ],
@@ -15,18 +14,31 @@
   "background_color": "#07101b",
   "theme_color": "#07101b",
   "lang": "id-ID",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "./icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
