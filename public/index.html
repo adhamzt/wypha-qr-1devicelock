@@ -2108,7 +2108,7 @@ async function persistLocalProject(asNew){
 async function loadLocalProject(){const id=suiteEl("localProjectList").value;if(!id)return suiteToast("Pilih proyek.");try{const r=await qfsProjectGet(id);if(r){loadProject(r.project);v6ActiveProjectId=id;suiteSet("localProjectName",r.name)}}catch(e){suiteToast(e.message)}}
 async function deleteLocalProject(){const id=suiteEl("localProjectList").value;if(!id||!confirm("Hapus proyek ini?"))return;await qfsProjectDelete(id);if(v6ActiveProjectId===id)v6ActiveProjectId=null;await refreshLocalProjectList();await renderProjectVault()}
 function scheduleSuiteAutosave(){
- window.v122QueueHistory?.();if(!suiteEl("localAutoSave")?.checked)return;clearTimeout(suiteAutoSaveTimer);const token=quickSheetResetToken;suiteAutoSaveTimer=setTimeout(async()=>{if(token!==quickSheetResetToken)return;try{suiteAutoSaveWrite=qfsProjectPut({id:"v6-autosave",name:"Draf otomatis terakhir",sourceLabel:"Autosave",updatedAt:new Date().toISOString(),project:captureForm()});await suiteAutoSaveWrite;if(token===quickSheetResetToken)await refreshLocalProjectList()}catch(e){if(token===quickSheetResetToken)suiteToast("Draf tidak tersimpan. Ekspor JSON sebagai backup.")}},v126PreviewMode()==='manual'?3000:900)
+ window.v122QueueHistory?.();if(!suiteEl("localAutoSave")?.checked)return;clearTimeout(suiteAutoSaveTimer);const token=quickSheetResetToken;suiteAutoSaveTimer=setTimeout(async()=>{if(token!==quickSheetResetToken)return;try{const snap=captureForm(),nowIso=new Date().toISOString();suiteAutoSaveWrite=qfsProjectPut({id:"v6-autosave",name:"Draf otomatis terakhir",sourceLabel:"Autosave",updatedAt:nowIso,project:snap});await suiteAutoSaveWrite;if(v6ActiveProjectId&&v6ActiveProjectId!=="v6-autosave"){const prev=await qfsProjectGet(v6ActiveProjectId).catch(()=>null);if(prev){await qfsProjectPut({...prev,updatedAt:nowIso,project:snap})}}if(token===quickSheetResetToken)await refreshLocalProjectList()}catch(e){if(token===quickSheetResetToken)suiteToast("Draf tidak tersimpan. Ekspor JSON sebagai backup.")}},350)
 }
 function suiteToast(message){
  var t=document.querySelector(".suite-toast");if(!t){t=document.createElement("div");t.className="suite-toast";document.body.appendChild(t)}t.textContent=message;t.classList.add("show");clearTimeout(t._timer);t._timer=setTimeout(function(){t.classList.remove("show")},2600)
@@ -6128,7 +6128,7 @@ function v126Clone(v){if(Array.isArray(v))return v.map(v126Clone);if(v&&typeof v
 function v126Defaults(){return{version:10,holo13:v13Settings(),fanCard:v1210Settings(),access:v129Access(),vault:v128Settings(),bio:v127Profile(),collector:v1265Settings(),neon:v1264Settings(),layout:v1263LayoutDefaults(),editor:{preview:'auto'},delivery:{deduplicate:true,webSize:1440},media:{collector:{mode:'gallery',photo:'first',src:'',name:''},fan:{mode:'gallery',photo:'first',src:'',name:''}},design:v1262DesignDefaults(),names:{portalMode:'image',mode:'off',fontSync:true,animated:false,first:'#fff4cb',second:'#e454b8',angle:100,targets:{ticket:true,collector:true,fan:true,portal:false}},content:{enabled:true,primary:'id',alternate:{},exportLanguage:'primary'},customer:{entry:true,compact:true,autoHide:true,personal:true,favourites:true,trail:true,resume:true,secret:true,secretAfter:3,secretText:{id:'Terima kasih sudah menjelajahi cerita ini. Semoga ada satu momen kecil yang ingin kamu simpan di hati.',en:'Thank you for exploring this story. May one little moment stay with you long after this visit.'},reply:false,phone:''}}}
 function v126Normalize(value){const d=v126Defaults(),v=value&&typeof value==='object'?value:{};d.editor.preview=['auto','manual','live'].includes(v.editor?.preview)?v.editor.preview:'auto';d.delivery.deduplicate=v.delivery?.deduplicate!==false;d.delivery.webSize=[1080,1440,1920].includes(Number(v.delivery?.webSize))?Number(v.delivery.webSize):1440;for(const key of Object.keys(V126_MEDIA_LABELS)){const m=v.media?.[key]||{};d.media[key]={mode:['gallery','upload','url'].includes(m.mode)?m.mode:'gallery',photo:typeof m.photo==='string'?m.photo:'first',src:typeof m.src==='string'?m.src:'',name:typeof m.name==='string'?m.name.slice(0,200):''}}const n=v.names||{};d.names.mode=['off','title','custom'].includes(n.mode)?n.mode:'off';d.names.fontSync=n.fontSync!==false;d.names.animated=n.animated===true;for(const key of ['first','second'])if(/^#[a-f0-9]{6}$/i.test(n[key]||''))d.names[key]=n[key];d.names.angle=Math.max(0,Math.min(360,Number.isFinite(Number(n.angle))?Number(n.angle):100));for(const key of Object.keys(d.names.targets))if(n.targets?.[key]!=null)d.names.targets[key]=!!n.targets[key];const c=v.content||{};d.content.enabled=c.enabled!==false;d.content.primary=c.primary==='en'?'en':'id';d.content.exportLanguage=['primary','id','en'].includes(c.exportLanguage)?c.exportLanguage:'primary';for(const [key,text]of Object.entries(c.alternate||{}))if(/^(?:dynamic|experience|product|rare|share|order|block)\.[a-zA-Z0-9_.-]+$/.test(key)&&typeof text==='string')d.content.alternate[key]=text.slice(0,24000);const g=v.customer||{};for(const key of ['entry','compact','autoHide','personal','favourites','trail','resume','secret','reply'])if(g[key]!=null)d.customer[key]=!!g[key];d.customer.secretAfter=Math.max(1,Math.min(20,Number(g.secretAfter)||3));for(const lang of ['id','en'])if(typeof g.secretText?.[lang]==='string')d.customer.secretText[lang]=g.secretText[lang].slice(0,6000);d.customer.phone=String(g.phone||'').replace(/[^+\d]/g,'').slice(0,20);d.names.portalMode=v.names?.portalMode==='text'?'text':'image';d.design=v1262NormalizeDesign(v.design);d.layout=v1263LayoutNormalize(v.layout);d.neon=v1264Settings(v.neon);d.collector=v1265Settings(v.collector);d.bio=v127Profile(v.bio);d.vault=v128Settings(v.vault);d.access=v129Access(v.access);d.fanCard=v1210Settings(v.fanCard);d.holo13=v13Settings(v.holo13);return d}
 let v126State=null,v126Booting=true,v126TypographyReady=false,v126TypographyPending=null,v126PreviewTimer=0,v126PreviewDirty=true,v126Generating=false;
-function v126Capture(){const result=v126Clone(v126State||v126Defaults());result.design=v1262CaptureDesign(result.design);return result}
+function v126Capture(){if(v126State?.holo13?.customerLock){const cl=v126State.holo13.customerLock;const pEl=$('v14StudioCustPin'),mEl=$('v14StudioMasterPin'),dEl=$('v20StudioAllowedDevId'),uEl=$('v20StudioCloudLockUrl');if(pEl&&pEl.value.trim())cl.pin=pEl.value.trim();if(mEl&&mEl.value.trim())cl.masterPin=mEl.value.trim();if(dEl)cl.allowedDeviceId=dEl.value.trim().toUpperCase();if(uEl)cl.cloudLockUrl=uEl.value.trim();}const result=v126Clone(v126State||v126Defaults());result.design=v1262CaptureDesign(result.design);return result}
 function v126Restore(value){v126State=v126Normalize(value);v126LanguageReview=null;v126PreviewDirty=true;v126ResetThumbs();v126RenderPanels();v126RenderMedia();v126NamesUI();v126RenderLanguage();window.v1261PreviewStatus?.();v1262StickerCache.clear();v1262RenderDesign();v1262PassControls($('v124ProductStudio'));window.v1264RenderControls?.();window.v1265RenderControls?.();window.v127RenderOwner?.();window.v128RenderOwner?.();window.v129RenderOwner?.();window.v1210Owner?.();window.v13RenderOwner?.();window.v1263RefreshViewports?.();window.v1263RenderEmbed?.()}
 function v126Changed(){v123Changed(false);doGenerate()}
 function v126MediaPhoto(s,key){const m=v126Normalize(s.studio126).media[key];if(m.mode==='gallery'){const photos=v126GalleryPhotos(s);return(m.photo==='first'?photos[0]:photos.find(p=>p.id===m.photo))||null}const src=v12Safe(m.src,'image');return src?{src,name:m.name||V126_MEDIA_LABELS[key],originalSrc:s.studio126?.originals?.[src]||src}:null}
@@ -6151,7 +6151,9 @@ function v126Ready(){v126Booting=false;v126Init();v1261Init();v1262Init();v1263I
   if(Array.isArray(rows)&&rows.length){
    const lastId=localStorage.getItem("wypha-studio-last-active-id-v144")||"";
    const explicitRows=rows.filter(r=>r&&r.id!=="v6-autosave"&&r.project);
-   const best=(lastId&&rows.find(r=>r&&r.id===lastId&&r.project))||explicitRows[0]||rows.find(r=>r&&r.project);
+   const autoRow=rows.find(r=>r&&r.id==="v6-autosave"&&r.project);
+   let best=(lastId&&rows.find(r=>r&&r.id===lastId&&r.project))||explicitRows[0]||autoRow||rows.find(r=>r&&r.project);
+   if(autoRow&&best&&autoRow!==best&&(Date.parse(autoRow.updatedAt||"")||0)>(Date.parse(best.updatedAt||"")||0)){best={...best,project:autoRow.project,updatedAt:autoRow.updatedAt};}
    if(best&&best.project){
     const expType=typeof v124Type==="function"?v124Type(best.project):(best.project.experience?.type||best.project.product||"baby");
     if(Object.hasOwn(V124_PROFILES,expType))v124Active=expType;
@@ -25120,12 +25122,12 @@ function v14CustomerRuntime(C) {
   const projId = String(customProjectLabel || C?.projectId || C?.product || 'wypha');
   const customerName = String(C?.personName || C?.customerName || customProjectLabel || '').trim();
   const prodType = String(C?.product || 'wypha');
-  const pinStateKey = 'wypha-v14-pin-state:' + projId;
-  const prodPinStateKey = 'wypha-v144-prod:wypha-v14-pin-state:' + prodType;
+  const studioPinConfigured = String(cfg.pin || '1234').trim();
+  const pinStateKey = 'wypha-v21-pin-state:' + projId + ':' + encodeURIComponent(studioPinConfigured);
   const ownerCertKey = 'wypha-v201-owner-device-cert:' + projId;
   const prodOwnerCertKey = 'wypha-v201-prod-owner-cert:' + prodType;
   const devInstanceKey = 'wypha-v201-device-instance-id';
-  const cookieName = 'w147_pin_' + projId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 36);
+  const cookieName = 'w21_pin_' + (projId + '_' + studioPinConfigured).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 44);
   const ownerCookieName = 'w201_own_' + projId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 36);
   const devIdCookieName = 'w201_devid';
 
@@ -25215,7 +25217,17 @@ function v14CustomerRuntime(C) {
   const readCookieUnlocked = () => readCookieVal(cookieName) === '1';
   const writeCookieUnlocked = unlocked => writeCookieVal(cookieName, unlocked ? '1' : '0');
 
-  const getConfiguredMasterPin = () => String(cfg.masterPin || 'WYPHA99').trim();
+  const getConfiguredMasterPin = () => String(cfg.masterPin ?? '').trim();
+
+  // Purge any legacy shared PIN keys so old PINs (e.g. 1986) from previous exports never overwrite the new Studio PIN!
+  try {
+    const legacyKey1 = 'wypha-v14-pin-state:' + projId;
+    const legacyKey2 = 'wypha-v144-prod:wypha-v14-pin-state:' + prodType;
+    localStorage.removeItem(legacyKey1);
+    localStorage.removeItem(legacyKey2);
+    sessionStorage.removeItem(legacyKey1);
+    sessionStorage.removeItem(legacyKey2);
+  } catch (e) {}
 
   const loadOwnerDeviceCert = () => {
     let boundOwnerDeviceId = lockedHardwareDeviceId;
@@ -25272,7 +25284,7 @@ function v14CustomerRuntime(C) {
             window.history.replaceState(null, document.title, cleanHref);
           }
         } catch (e2) {}
-        if (token === expectedForThisPhone || token === master) {
+        if (token === expectedForThisPhone || (master && token === master)) {
           return true;
         }
       }
@@ -25291,12 +25303,16 @@ function v14CustomerRuntime(C) {
     try {
       const raw =
         localStorage.getItem(pinStateKey) ||
-        localStorage.getItem(prodPinStateKey) ||
         sessionStorage.getItem(pinStateKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          if (typeof parsed.customPin === 'string' && parsed.customPin.trim()) {
+          // Only accept customPin if it was explicitly saved by the customer under THIS exact studioPinConfigured!
+          if (
+            parsed.studioPin === studioPinConfigured &&
+            typeof parsed.customPin === 'string' &&
+            parsed.customPin.trim()
+          ) {
             out.customPin = parsed.customPin.trim();
           }
           if (!out.boundOwnerDeviceId && parsed.unlocked === true) {
@@ -25311,7 +25327,7 @@ function v14CustomerRuntime(C) {
         }
       }
     } catch (e) {}
-    const activePin = (out.customPin && out.customPin.trim()) ? out.customPin.trim() : String(cfg.pin || '1234').trim();
+    const activePin = (out.customPin && out.customPin.trim()) ? out.customPin.trim() : studioPinConfigured;
     if (checkAndConsumeUrlOwnerToken(activePin)) {
       if (!out.boundOwnerDeviceId || out.boundOwnerDeviceId === realPhysicalDeviceId) {
         out.boundOwnerDeviceId = realPhysicalDeviceId;
@@ -25342,18 +25358,19 @@ function v14CustomerRuntime(C) {
   };
 
   const getActiveCustomerPin = () => {
-    return (state.customPin && state.customPin.trim()) ? state.customPin.trim() : String(cfg.pin || '1234').trim();
+    return (state.customPin && state.customPin.trim()) ? state.customPin.trim() : studioPinConfigured;
   };
 
   const getCustomerBoundLicenseCode = () => {
     const ownerId = state.boundOwnerDeviceId || lockedHardwareDeviceId || realPhysicalDeviceId;
-    return computeLicenseCodeForDevice(ownerId, getActiveCustomerPin());
+    return computeLicenseCodeForDevice(ownerId, studioPinConfigured);
   };
 
   const savePinState = () => {
     saveOwnerDeviceCert(state.boundOwnerDeviceId);
     const payload = {
       unlocked: !!state.unlocked,
+      studioPin: studioPinConfigured,
       customPin: state.customPin || '',
       unlockedBy: state.unlockedBy || '',
       boundOwnerDeviceId: state.boundOwnerDeviceId || '',
@@ -25363,12 +25380,12 @@ function v14CustomerRuntime(C) {
     try { sessionStorage.setItem(pinStateKey, str); } catch (e) {}
     if (cfg.sessionMode !== 'always_locked') {
       try { localStorage.setItem(pinStateKey, str); } catch (e) {}
-      try { localStorage.setItem(prodPinStateKey, str); } catch (e) {}
       try { window.__wyphaMasterVault?.put?.(pinStateKey, payload); } catch (e) {}
       writeCookieUnlocked(state.unlocked);
     } else {
       const pinOnly = JSON.stringify({
         unlocked: false,
+        studioPin: studioPinConfigured,
         customPin: state.customPin || '',
         boundOwnerDeviceId: state.boundOwnerDeviceId || '',
         updatedAt: Date.now()
@@ -25426,16 +25443,18 @@ function v14CustomerRuntime(C) {
     const masterPin = getConfiguredMasterPin();
     const activeDevId = getCurrentActiveDeviceId();
     const expectedCodeForActiveDev = computeLicenseCodeForDevice(activeDevId, custPin).toUpperCase();
+    const expectedStudioCodeForActiveDev = computeLicenseCodeForDevice(activeDevId, studioPinConfigured).toUpperCase();
     const ownerDevId = state.boundOwnerDeviceId || lockedHardwareDeviceId;
     const ownerLicenseCode = ownerDevId ? computeLicenseCodeForDevice(ownerDevId, custPin).toUpperCase() : '';
 
-    // 1. Master Admin Recovery Key
-    if ((masterPin && val.toUpperCase() === masterPin.toUpperCase()) || val.toUpperCase() === 'WYPHA99') {
+    // 1. Master Admin Recovery Key — strictly checks ONLY the configured Master PIN from Studio!
+    if (masterPin && val.toUpperCase() === masterPin.toUpperCase()) {
       return { status: 'master' };
     }
 
-    // 2. Check if PIN matches Customer PIN
-    if (val !== custPin) {
+    // 2. Check if PIN matches Customer PIN (either active customPin or Studio-configured PIN)
+    const isPinValid = (val === custPin) || (val === studioPinConfigured);
+    if (!isPinValid) {
       return { status: 'wrong_pin' };
     }
 
@@ -25457,7 +25476,7 @@ function v14CustomerRuntime(C) {
       }
 
       // CASE C: Slot 1/1 is not yet bound on this browser.
-      if (!codeVal || codeVal === expectedCodeForActiveDev || codeVal === 'KHP-AUTO' || (customProjectLabel && codeVal === customProjectLabel.toUpperCase())) {
+      if (!codeVal || codeVal === expectedCodeForActiveDev || codeVal === expectedStudioCodeForActiveDev || codeVal === 'KHP-AUTO' || (customProjectLabel && codeVal === customProjectLabel.toUpperCase())) {
         return { status: 'customer_bound_now', boundDevId: activeDevId };
       }
 
@@ -26049,7 +26068,12 @@ function v14RenderOwner() {
     )
   );
 
-  const curProjId = String(v124Studio?.id || rareStudio?.customerGallery?.id || v124Active || 'wypha');
+  const isHwIdFormat = id => /^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/i.test(String(id || '').trim());
+  const getEffectiveStudioProjId = () => {
+    const rawAllowed = String(pinGrid?.querySelector('#v20StudioAllowedDevId')?.value ?? cl.allowedDeviceId ?? '').trim();
+    if (rawAllowed && !isHwIdFormat(rawAllowed)) return rawAllowed;
+    return String(v124Studio?.id || rareStudio?.customerGallery?.id || v124Active || 'wypha');
+  };
 
   const pinGrid = document.createElement('div');
   pinGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:8px';
@@ -26068,10 +26092,12 @@ function v14RenderOwner() {
     '</label>';
   body.appendChild(pinGrid);
 
+  const curProjId = getEffectiveStudioProjId();
+
   // Interactive Hardware License Code Calculator Box in Studio
   const calcBox = document.createElement('div');
   calcBox.style.cssText = 'margin-top:10px;padding:12px;border-radius:12px;background:rgba(16,185,129,0.1);border:1px solid rgba(52,211,153,0.4);font-size:12px';
-  const sampleDevId = cl.allowedDeviceId || 'W20-8F3A-91C2';
+  const sampleDevId = isHwIdFormat(cl.allowedDeviceId) ? cl.allowedDeviceId : 'W20-8F3A-91C2';
   const computedKhp = v14ComputeDeviceLicenseCode(sampleDevId, cl.pin || '1234', curProjId);
   calcBox.innerHTML =
     '<strong style="display:block;color:#6ee7b7;margin-bottom:6px">🧮 Generator Kode Kunci Kriptografis 1-HP (Hanya Berlaku di 1 ID-HP Customer):</strong>' +
@@ -26089,7 +26115,7 @@ function v14RenderOwner() {
   const recalcStudioCode = () => {
     const dId = (calcBox.querySelector('#v20CalcDevIdInput')?.value || '').trim() || 'W20-8F3A-91C2';
     const pVal = (pinGrid.querySelector('#v14StudioCustPin')?.value || '').trim() || '1234';
-    const pId = String(v124Studio?.id || rareStudio?.customerGallery?.id || v124Active || 'wypha');
+    const pId = getEffectiveStudioProjId();
     const outEl = calcBox.querySelector('#v20CalcResultCode');
     if (outEl) outEl.textContent = v14ComputeDeviceLicenseCode(dId, pVal, pId);
   };
@@ -26102,10 +26128,10 @@ function v14RenderOwner() {
   pinGrid.querySelector('#v20StudioAllowedDevId').oninput = e => {
     const val = e.target.value.trim().toUpperCase();
     updateCL({ allowedDeviceId: val });
-    if (val) {
+    if (isHwIdFormat(val)) {
       calcBox.querySelector('#v20CalcDevIdInput').value = val;
-      recalcStudioCode();
     }
+    recalcStudioCode();
   };
   pinGrid.querySelector('#v20StudioCloudLockUrl').oninput = e => updateCL({ cloudLockUrl: e.target.value.trim() });
   pinGrid.querySelector('#v14StudioMasterPin').oninput = e => updateCL({ masterPin: e.target.value.trim() || 'WYPHA99' });
@@ -26117,7 +26143,7 @@ function v14RenderOwner() {
   const copyInfoBtn = v126Button('📋 Salin Kode Kunci 1-HP & PIN untuk Customer', async () => {
     const curPin = v126State?.holo13?.customerLock?.pin || '1234';
     const dId = (calcBox.querySelector('#v20CalcDevIdInput')?.value || '').trim() || 'W20-XXXX-XXXX';
-    const khpCode = v14ComputeDeviceLicenseCode(dId, curPin, curProjId);
+    const khpCode = v14ComputeDeviceLicenseCode(dId, curPin, getEffectiveStudioProjId());
     const msg =
       `Halo Kak! Berikut Lisensi Kunci 1-Perangkat untuk Microsite WYPHA Kakak:
 ` +
@@ -42279,10 +42305,11 @@ function v143MasterBootRuntime(CFG) {
           isThisPhoneOwner = true;
         }
         if (clCfg.sessionMode !== 'always_locked' && isThisPhoneOwner) {
-          const pinKey = 'wypha-v14-pin-state:' + projId;
-          const prodPinKey = 'wypha-v144-prod:wypha-v14-pin-state:' + prodType;
+          const studioPinCfg = String(clCfg.pin || '1234').trim();
+          const effProjId = (!(/^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/i.test(rawAllowed)) && rawAllowed) ? rawAllowed : projId;
+          const pinKey = 'wypha-v21-pin-state:' + effProjId + ':' + encodeURIComponent(studioPinCfg);
           const rawPin =
-            (window.localStorage && (window.localStorage.getItem(pinKey) || window.localStorage.getItem(prodPinKey))) ||
+            (window.localStorage && window.localStorage.getItem(pinKey)) ||
             (window.sessionStorage && window.sessionStorage.getItem(pinKey));
           if (rawPin && JSON.parse(rawPin)?.unlocked === true) remembered = true;
         }
@@ -42305,7 +42332,6 @@ function v143MasterBootRuntime(CFG) {
 
   // Canonicalize any wypha storage key so path variations (/index.html, trailing slash, QR query params, embed path, origin, or re-exported projectId) never miss saved data!
   const prefixes = [
-    'wypha-v14-pin-state:',
     'wypha-led3d-panel-v151:',
     'wypha-vibe-nuance-v152:',
     'wypha-personal-bio-v154:',

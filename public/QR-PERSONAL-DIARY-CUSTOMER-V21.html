@@ -851,10 +851,11 @@ body.has-theme-image .ending{background:linear-gradient(180deg,color-mix(in srgb
           isThisPhoneOwner = true;
         }
         if (clCfg.sessionMode !== 'always_locked' && isThisPhoneOwner) {
-          const pinKey = 'wypha-v14-pin-state:' + projId;
-          const prodPinKey = 'wypha-v144-prod:wypha-v14-pin-state:' + prodType;
+          const studioPinCfg = String(clCfg.pin || '1234').trim();
+          const effProjId = (!(/^W20-[0-9A-F]{4}-[0-9A-Z]{4,10}$/i.test(rawAllowed)) && rawAllowed) ? rawAllowed : projId;
+          const pinKey = 'wypha-v21-pin-state:' + effProjId + ':' + encodeURIComponent(studioPinCfg);
           const rawPin =
-            (window.localStorage && (window.localStorage.getItem(pinKey) || window.localStorage.getItem(prodPinKey))) ||
+            (window.localStorage && window.localStorage.getItem(pinKey)) ||
             (window.sessionStorage && window.sessionStorage.getItem(pinKey));
           if (rawPin && JSON.parse(rawPin)?.unlocked === true) remembered = true;
         }
@@ -877,7 +878,6 @@ body.has-theme-image .ending{background:linear-gradient(180deg,color-mix(in srgb
 
   // Canonicalize any wypha storage key so path variations (/index.html, trailing slash, QR query params, embed path, origin, or re-exported projectId) never miss saved data!
   const prefixes = [
-    'wypha-v14-pin-state:',
     'wypha-led3d-panel-v151:',
     'wypha-vibe-nuance-v152:',
     'wypha-personal-bio-v154:',
@@ -12645,12 +12645,12 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
   const projId = String(customProjectLabel || C?.projectId || C?.product || 'wypha');
   const customerName = String(C?.personName || C?.customerName || customProjectLabel || 'WYPHA JUNIOR').trim();
   const prodType = String(C?.product || 'wypha');
-  const pinStateKey = 'wypha-v14-pin-state:' + projId;
-  const prodPinStateKey = 'wypha-v144-prod:wypha-v14-pin-state:' + prodType;
+  const studioPinConfigured = String(cfg.pin || '1234').trim();
+  const pinStateKey = 'wypha-v21-pin-state:' + projId + ':' + encodeURIComponent(studioPinConfigured);
   const ownerCertKey = 'wypha-v201-owner-device-cert:' + projId;
   const prodOwnerCertKey = 'wypha-v201-prod-owner-cert:' + prodType;
   const devInstanceKey = 'wypha-v201-device-instance-id';
-  const cookieName = 'w147_pin_' + projId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 36);
+  const cookieName = 'w21_pin_' + (projId + '_' + studioPinConfigured).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 44);
   const ownerCookieName = 'w201_own_' + projId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 36);
   const devIdCookieName = 'w201_devid';
 
@@ -12740,7 +12740,17 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
   const readCookieUnlocked = () => readCookieVal(cookieName) === '1';
   const writeCookieUnlocked = unlocked => writeCookieVal(cookieName, unlocked ? '1' : '0');
 
-  const getConfiguredMasterPin = () => String(cfg.masterPin || 'WYPHA99').trim();
+  const getConfiguredMasterPin = () => String(cfg.masterPin ?? '').trim();
+
+  // Purge any legacy shared PIN keys so old PINs (e.g. 1986) from previous exports never overwrite the new Studio PIN!
+  try {
+    const legacyKey1 = 'wypha-v14-pin-state:' + projId;
+    const legacyKey2 = 'wypha-v144-prod:wypha-v14-pin-state:' + prodType;
+    localStorage.removeItem(legacyKey1);
+    localStorage.removeItem(legacyKey2);
+    sessionStorage.removeItem(legacyKey1);
+    sessionStorage.removeItem(legacyKey2);
+  } catch (e) {}
 
   const loadOwnerDeviceCert = () => {
     let boundOwnerDeviceId = lockedHardwareDeviceId;
@@ -12797,7 +12807,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
             window.history.replaceState(null, document.title, cleanHref);
           }
         } catch (e2) {}
-        if (token === expectedForThisPhone || token === master) {
+        if (token === expectedForThisPhone || (master && token === master)) {
           return true;
         }
       }
@@ -12816,12 +12826,16 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     try {
       const raw =
         localStorage.getItem(pinStateKey) ||
-        localStorage.getItem(prodPinStateKey) ||
         sessionStorage.getItem(pinStateKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          if (typeof parsed.customPin === 'string' && parsed.customPin.trim()) {
+          // Only accept customPin if it was explicitly saved by the customer under THIS exact studioPinConfigured!
+          if (
+            parsed.studioPin === studioPinConfigured &&
+            typeof parsed.customPin === 'string' &&
+            parsed.customPin.trim()
+          ) {
             out.customPin = parsed.customPin.trim();
           }
           if (!out.boundOwnerDeviceId && parsed.unlocked === true) {
@@ -12836,7 +12850,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
         }
       }
     } catch (e) {}
-    const activePin = (out.customPin && out.customPin.trim()) ? out.customPin.trim() : String(cfg.pin || '1234').trim();
+    const activePin = (out.customPin && out.customPin.trim()) ? out.customPin.trim() : studioPinConfigured;
     if (checkAndConsumeUrlOwnerToken(activePin)) {
       if (!out.boundOwnerDeviceId || out.boundOwnerDeviceId === realPhysicalDeviceId) {
         out.boundOwnerDeviceId = realPhysicalDeviceId;
@@ -12867,18 +12881,19 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
   };
 
   const getActiveCustomerPin = () => {
-    return (state.customPin && state.customPin.trim()) ? state.customPin.trim() : String(cfg.pin || '1234').trim();
+    return (state.customPin && state.customPin.trim()) ? state.customPin.trim() : studioPinConfigured;
   };
 
   const getCustomerBoundLicenseCode = () => {
     const ownerId = state.boundOwnerDeviceId || lockedHardwareDeviceId || realPhysicalDeviceId;
-    return computeLicenseCodeForDevice(ownerId, getActiveCustomerPin());
+    return computeLicenseCodeForDevice(ownerId, studioPinConfigured);
   };
 
   const savePinState = () => {
     saveOwnerDeviceCert(state.boundOwnerDeviceId);
     const payload = {
       unlocked: !!state.unlocked,
+      studioPin: studioPinConfigured,
       customPin: state.customPin || '',
       unlockedBy: state.unlockedBy || '',
       boundOwnerDeviceId: state.boundOwnerDeviceId || '',
@@ -12888,12 +12903,12 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     try { sessionStorage.setItem(pinStateKey, str); } catch (e) {}
     if (cfg.sessionMode !== 'always_locked') {
       try { localStorage.setItem(pinStateKey, str); } catch (e) {}
-      try { localStorage.setItem(prodPinStateKey, str); } catch (e) {}
       try { window.__wyphaMasterVault?.put?.(pinStateKey, payload); } catch (e) {}
       writeCookieUnlocked(state.unlocked);
     } else {
       const pinOnly = JSON.stringify({
         unlocked: false,
+        studioPin: studioPinConfigured,
         customPin: state.customPin || '',
         boundOwnerDeviceId: state.boundOwnerDeviceId || '',
         updatedAt: Date.now()
@@ -12951,16 +12966,18 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
     const masterPin = getConfiguredMasterPin();
     const activeDevId = getCurrentActiveDeviceId();
     const expectedCodeForActiveDev = computeLicenseCodeForDevice(activeDevId, custPin).toUpperCase();
+    const expectedStudioCodeForActiveDev = computeLicenseCodeForDevice(activeDevId, studioPinConfigured).toUpperCase();
     const ownerDevId = state.boundOwnerDeviceId || lockedHardwareDeviceId;
     const ownerLicenseCode = ownerDevId ? computeLicenseCodeForDevice(ownerDevId, custPin).toUpperCase() : '';
 
-    // 1. Master Admin Recovery Key
-    if ((masterPin && val.toUpperCase() === masterPin.toUpperCase()) || val.toUpperCase() === 'WYPHA99') {
+    // 1. Master Admin Recovery Key — strictly checks ONLY the configured Master PIN from Studio!
+    if (masterPin && val.toUpperCase() === masterPin.toUpperCase()) {
       return { status: 'master' };
     }
 
-    // 2. Check if PIN matches Customer PIN
-    if (val !== custPin) {
+    // 2. Check if PIN matches Customer PIN (either active customPin or Studio-configured PIN)
+    const isPinValid = (val === custPin) || (val === studioPinConfigured);
+    if (!isPinValid) {
       return { status: 'wrong_pin' };
     }
 
@@ -12982,7 +12999,7 @@ html.wypha-visitor-locked #wyphaPersonalDiaryNoteSection select:not(#v154CalMont
       }
 
       // CASE C: Slot 1/1 is not yet bound on this browser.
-      if (!codeVal || codeVal === expectedCodeForActiveDev || codeVal === 'KHP-AUTO' || (customProjectLabel && codeVal === customProjectLabel.toUpperCase())) {
+      if (!codeVal || codeVal === expectedCodeForActiveDev || codeVal === expectedStudioCodeForActiveDev || codeVal === 'KHP-AUTO' || (customProjectLabel && codeVal === customProjectLabel.toUpperCase())) {
         return { status: 'customer_bound_now', boundDevId: activeDevId };
       }
 

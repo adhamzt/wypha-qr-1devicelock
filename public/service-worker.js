@@ -1,6 +1,6 @@
 // Scope-aware app-shell cache for WYPHA Studio & Customer Microsites V21
 const PREFIX = 'wypha-v13.3.0';
-const CACHE = PREFIX + '-portal-v21-clean-lock-pwa-20261113-' + encodeURIComponent(self.registration.scope);
+const CACHE = PREFIX + '-portal-v21-pin-lock-fix-20261113-' + encodeURIComponent(self.registration.scope);
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'].map(p => new URL(p, self.registration.scope).href);
 
 self.addEventListener('install', e => {
@@ -27,13 +27,16 @@ self.addEventListener('fetch', e => {
   if (url.origin !== root.origin) return;
   if (url.pathname.startsWith('/api/')) return;
   const isIndex = url.pathname === root.pathname || url.pathname === new URL('index.html', root).pathname;
-  const isCustomerHtml = /\.html$/i.test(url.pathname);
+  const isCustomerHtml = /\.html$/i.test(url.pathname) || e.request.mode === 'navigate';
   const key = isIndex ? SHELL[1] : url.href;
   if (!isIndex && !isCustomerHtml && !SHELL.includes(key)) return;
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     try {
-      const response = await fetch(e.request);
+      const fetchReq = (isIndex || isCustomerHtml)
+        ? new Request(e.request, { cache: 'no-store' })
+        : e.request;
+      const response = await fetch(fetchReq);
       if (response && response.ok) {
         await cache.put(key, response.clone());
         return response;
