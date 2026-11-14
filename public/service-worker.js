@@ -1,7 +1,7 @@
 // Scope-aware app-shell cache for WYPHA Studio & Customer Microsites V21
 const PREFIX = 'wypha-v13.3.0';
-const CACHE = PREFIX + '-portal-v21-max2dev-dualpin-20261114-' + encodeURIComponent(self.registration.scope);
-const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'].map(p => new URL(p, self.registration.scope).href);
+const CACHE = PREFIX + '-portal-v21-oom-fix-rescue-20261114-' + encodeURIComponent(self.registration.scope);
+const SHELL = ['./', 'index.html', 'rescue.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'].map(p => new URL(p, self.registration.scope).href);
 
 self.addEventListener('install', e => {
   self.skipWaiting();

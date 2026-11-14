@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🛟 Penyelamat & Ekspor Proyek Langsung — WYPHA V21 (Anti-Crash)</title>
+<style>
+  :root {
+    --bg: #07101b;
+    --card: #0d1b2e;
+    --border: rgba(99, 231, 255, 0.32);
+    --cyan: #63e7ff;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --text: #ecf6ff;
+    --muted: #9fb4cc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 18px 14px 48px;
+    background: var(--bg);
+    color: var(--text);
+    font: 500 14px/1.5 system-ui, -apple-system, sans-serif;
+  }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .hero {
+    padding: 16px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(56, 189, 248, 0.14));
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    margin: 0 0 6px;
+    font-size: 18px;
+    color: #fff;
+  }
+  .hero p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .top-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: #132742;
+    color: #fff;
+    padding: 9px 13px;
+    border-radius: 10px;
+    font: 700 12.5px/1.2 system-ui, sans-serif;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn.primary {
+    background: linear-gradient(135deg, #0284c7, #059669);
+    border-color: #6ee7b7;
+  }
+  .btn.amber {
+    background: rgba(245, 158, 11, 0.22);
+    border-color: var(--amber);
+    color: #fde68a;
+  }
+  .btn.danger {
+    background: rgba(244, 63, 94, 0.2);
+    border-color: var(--rose);
+    color: #fecdd3;
+  }
+  .status-box {
+    padding: 11px 14px;
+    border-radius: 12px;
+    background: rgba(14, 32, 58, 0.9);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    color: #bae6fd;
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+  .card {
+    padding: 14px;
+    border-radius: 14px;
+    background: var(--card);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-weight: 800;
+    font-size: 15px;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .card-meta {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .card-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>🛟 Penyelamat & Ekspor Proyek Langsung (Mode Anti-Crash V21)</h1>
+    <p>Halaman ringan ini membaca database penyimpanan lokal browser (<code>wyphaMagicQRDB</code>) secara langsung <strong>tanpa membuka editor Studio yang berat</strong>. Gunakan halaman ini untuk mengekspor proyek ke File Explorer (<code>.qfs.json</code>) atau merampingkan ukuran foto proyek agar tidak mengalami crash memori (<em>"Yah! Terjadi masalah sewaktu menampilkan halaman web ini"</em>).</p>
+    <div class="top-actions">
+      <a class="btn primary" href="./index.html?rescue=1">⬅️ Buka Studio dalam Mode Aman</a>
+      <button type="button" class="btn amber" id="optimizeAllBtn">⚡ Rampingkan Semua Foto Proyek di Database (Anti-Crash)</button>
+      <button type="button" class="btn" id="refreshBtn">🔄 Muat Ulang Daftar</button>
+    </div>
+  </div>
+
+  <div id="statusBox" class="status-box">Memindai proyek yang tersimpan di memori browser HP ini...</div>
+  <div id="projectList"></div>
+</div>
+
+<script>
+const DB_NAME = 'wyphaMagicQRDB';
+const STORE_NAME = 'projects';
+const statusBox = document.getElementById('statusBox');
+const projectList = document.getElementById('projectList');
+
+function setStatus(msg) {
+  statusBox.textContent = msg;
+}
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function listProjectMetadata() {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const items = [];
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.openCursor();
+    req.onsuccess = e => {
+      const cur = e.target.result;
+      if (cur) {
+        const v = cur.value || {};
+        const p = v.project || {};
+        const photosCount =
+          (Array.isArray(p.media?.uploadedPhotos) ? p.media.uploadedPhotos.length : 0) +
+          (Array.isArray(p.rareStudio?.album?.photos) ? p.rareStudio.album.photos.length : 0);
+        let approxBytes = 0;
+        try {
+          (p.media?.uploadedPhotos || []).forEach(ph => {
+            approxBytes += (ph?.src?.length || 0) + (ph?.originalSrc?.length || 0);
+          });
+        } catch (err) {}
+        items.push({
+          id: v.id,
+          name: v.name || p.dynamic?.customerName || p.experience?.name || v.id,
+          sourceLabel: v.sourceLabel || 'Proyek Tersimpan',
+          updatedAt: v.updatedAt || '',
+          product: p.product || 'baby',
+          photosCount,
+          approxMb: (approxBytes / 1048576).toFixed(1)
+        });
+        cur.continue();
+      } else {
+        db.close();
+        resolve(items.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))));
+      }
+    };
+    req.onerror = () => {
+      db.close();
+      reject(req.error);
+    };
+  });
+}
+
+async function getSingleRecord(id) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(id);
+    req.onsuccess = () => { db.close(); resolve(req.result || null); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  });
+}
+
+async function putSingleRecord(rec) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(rec);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+async function deleteSingleRecord(id) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(id);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+function recompressDataUrl(dataUrl, maxDim = 1280, quality = 0.78) {
+  return new Promise(resolve => {
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/') || dataUrl.length < 220000) {
+      return resolve(dataUrl);
+    }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width || 1;
+        const h = img.naturalHeight || img.height || 1;
+        const k = Math.min(1, maxDim / Math.max(w, h));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w * k));
+        c.height = Math.max(1, Math.round(h * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        const out = c.toDataURL('image/jpeg', quality);
+        c.width = c.height = 0;
+        resolve(out.length < dataUrl.length ? out : dataUrl);
+      } catch (e) {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+async function optimizeRecordPhotos(id) {
+  setStatus('⏳ Sedang merampingkan foto pada proyek "' + id + '" agar ringan di RAM HP...');
+  const rec = await getSingleRecord(id);
+  if (!rec || !rec.project) return;
+  const p = rec.project;
+  let savedCount = 0;
+  if (Array.isArray(p.media?.uploadedPhotos)) {
+    for (const ph of p.media.uploadedPhotos) {
+      if (!ph) continue;
+      if (ph.originalSrc) { delete ph.originalSrc; savedCount++; }
+      if (ph.src && ph.src.length > 220000) {
+        ph.src = await recompressDataUrl(ph.src, 1280, 0.78);
+        savedCount++;
+      }
+    }
+  }
+  if (Array.isArray(p.rareStudio?.album?.photos)) {
+    for (const ph of p.rareStudio.album.photos) {
+      if (!ph) continue;
+      if (ph.originalSrc) { delete ph.originalSrc; savedCount++; }
+      if (ph.src && ph.src.length > 220000) {
+        ph.src = await recompressDataUrl(ph.src, 1280, 0.78);
+        savedCount++;
+      }
+    }
+  }
+  await putSingleRecord(rec);
+  setStatus('✓ Proyek "' + (rec.name || id) + '" berhasil dirampingkan! Sekarang proyek sangat ringan dan siap dibuka kembali di Studio tanpa error.');
+  await renderList();
+}
+
+async function exportRecordJson(id) {
+  setStatus('⏳ Menyiapkan file ekspor .qfs.json untuk "' + id + '"...');
+  const rec = await getSingleRecord(id);
+  if (!rec || !rec.project) {
+    setStatus('⚠ Data proyek tidak ditemukan.');
+    return;
+  }
+  const cleanName = String(rec.name || id || 'WYPHA-PROYEK').replace(/[^a-zA-Z0-9_-]+/g, '-');
+  const blob = new Blob([JSON.stringify(rec.project)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = cleanName + '.qfs.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 20000);
+  setStatus('✓ File "' + cleanName + '.qfs.json" berhasil diunduh ke folder Download di File Explorer HP Anda!');
+}
+
+async function renderList() {
+  try {
+    const items = await listProjectMetadata();
+    projectList.innerHTML = '';
+    if (!items.length) {
+      setStatus('Belum ada proyek tersimpan di database browser ini.');
+      return;
+    }
+    setStatus('✓ Ditemukan ' + items.length + ' proyek/draf di penyimpanan lokal browser Anda. Pilih tombol di bawah untuk mengunduh ke File Explorer atau merampingkan ukuran foto:');
+    for (const it of items) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML =
+        '<div class="card-title">' + (it.name || it.id) + (it.id === 'v6-autosave' ? ' <span style="color:#fbbf24;font-size:12px">(Draf Otomatis Terakhir)</span>' : '') + '</div>' +
+        '<div class="card-meta">ID: <code>' + it.id + '</code> • Produk: ' + it.product + ' • Jumlah Foto: <strong>' + it.photosCount + ' foto</strong> (~' + it.approxMb + ' MB di memori) • Diperbarui: ' + (it.updatedAt ? new Date(it.updatedAt).toLocaleString('id-ID') : '-') + '</div>' +
+        '<div class="card-actions">' +
+          '<button type="button" class="btn primary" data-export="' + it.id + '">📥 Ekspor ke File Explorer (.qfs.json)</button>' +
+          '<button type="button" class="btn amber" data-opt="' + it.id + '">⚡ Rampingkan Foto Proyek Ini (Anti-Crash)</button>' +
+          '<button type="button" class="btn danger" data-del="' + it.id + '">🗑️ Hapus</button>' +
+        '</div>';
+      card.querySelector('[data-export]').onclick = () => exportRecordJson(it.id);
+      card.querySelector('[data-opt]').onclick = () => optimizeRecordPhotos(it.id);
+      card.querySelector('[data-del]').onclick = async () => {
+        if (!confirm('Hapus proyek "' + (it.name || it.id) + '" dari memori browser?')) return;
+        await deleteSingleRecord(it.id);
+        await renderList();
+      };
+      projectList.appendChild(card);
+    }
+  } catch (err) {
+    setStatus('⚠ Gagal membaca database: ' + (err.message || err));
+  }
+}
+
+document.getElementById('refreshBtn').onclick = renderList;
+document.getElementById('optimizeAllBtn').onclick = async () => {
+  const items = await listProjectMetadata();
+  for (const it of items) {
+    await optimizeRecordPhotos(it.id);
+  }
+  setStatus('✓ Seluruh proyek di database telah dirampingkan! Silakan klik "Buka Studio dalam Mode Aman" di atas.');
+};
+
+renderList();
+</script>
+</body>
+</html>
