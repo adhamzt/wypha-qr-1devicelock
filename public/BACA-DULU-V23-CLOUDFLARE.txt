@@ -1,0 +1,14 @@
+=================================================================
+WYPHA-PRINTLAB QR FANTASY STUDIO · V23 (CLOUDFLARE PAGES EDITION)
+=================================================================
+
+PEMBARUAN V23 (AUDIT & PERBAIKAN MENYELURUH):
+1. Perbaikan Stiker Berganti Ekspresi (Tap-to-Swap) di Live Preview & Penempatan:
+   - Memperbaiki filter URL keamanan (`v12Safe` & `v12BrowserRuntime`) yang sebelumnya memblokir `blob:` URL dari akselerator Live Preview sehingga stiker gagal berganti ekspresi saat ditekan di preview.
+   - Menambahkan dukungan klik langsung di layar Penempatan (`2. Penempatan`) tanpa tertahan oleh event drag, serta otomatis memuat daftar ekspresi dari hasil potong stiker (`1. Potong`) saat aksi "Ganti ekspresi / gambar" dipilih.
+2. Perbaikan AI Typography Lab & Tampilan Nama Gerbang Pembuka:
+   - Memperbaiki input unggah gambar AI Typography (`#typoUpload`) agar langsung memproses file PNG/WebP/JPG tanpa mereset pilihan file menjadi "Tidak ada file yang dipilih", serta otomatis mengisi teks label aksesibilitas bila kolom teks masih kosong.
+   - Menambahkan opsi sinkronisasi otomatis ke Nama Gerbang Pembuka (`#typoAlsoPortal`) dan kotak pratinjau visual (`#typoPreviewBox`) di dalam AI Typography Lab yang menampilkan thumbnail gambar terpasang, nama file, ukuran lebar, dan status slot aktif.
+   - Memperbaiki render gambar tipografi pada Gerbang Pembuka (`.qfs-wow-name-frame`) di Live Preview dan hasil export HTML agar tampil penuh dan presisi.
+3. Audit Non-Regresi:
+   - Live Preview sinkron real-time, isolasi penuh antar-proyek, tombol-tombol Project Vault (+ Import Project JSON, Backup Semua Proyek, Import HTML Proyek Lama), Generator Link Foto Massal, dan Kunci 2 Perangkat + Master PIN Fallback tetap berfungsi normal.
