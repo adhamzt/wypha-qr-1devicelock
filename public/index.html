@@ -2308,7 +2308,170 @@ function initV11(){
  const shortcut=document.createElement('button');shortcut.type='button';shortcut.className=$('businessTopBtn').className;shortcut.textContent='◉ ON / OFF';shortcut.onclick=()=>{panel.open=true;panel.scrollIntoView({behavior:'smooth',block:'start'})};$('businessTopBtn').after(shortcut);
  panel.addEventListener('change',v11Changed);['v11PassLabel','v111NoteTitle'].forEach(id=>$(id).addEventListener('input',()=>{clearTimeout(panel._timer);panel._timer=setTimeout(v11Changed,350)}));
  $('v11AllOn').onclick=()=>{V11_COMPONENTS.forEach(([k])=>$('v11on_'+k).checked=true);v11Changed()};$('v11Minimal').onclick=()=>{const on=new Set(['brand','names','subtitle','gallery','videos','footer']);V11_COMPONENTS.forEach(([k])=>$('v11on_'+k).checked=on.has(k));v11Changed()};
- const photos=$('experiencePhotoUrls');photos.closest('.field').hidden=true;photos.insertAdjacentHTML('afterend','<div id="v11PhotoUrlList"></div>');const photoUI=document.createElement('div');photoUI.innerHTML='<div class="v11-actions"><button class="btn" id="v11AddPhotoUpload" type="button">＋ Add Gallery • unggah foto</button><button class="btn" id="v11AddPhotoUrl" type="button">＋ URL foto</button><button class="btn" id="v11ReducePhoto" type="button">− Reduce Gallery</button></div><div id="v11PhotoCount" class="note" role="status"></div><div id="v11PhotoUrlHost"></div>';$('experiencePhotoList').before(photoUI);$('v11PhotoUrlHost').append($('v11PhotoUrlList'));
+ const photos=$('experiencePhotoUrls');photos.closest('.field').hidden=true;photos.insertAdjacentHTML('afterend','<div id="v11PhotoUrlList"></div>');const photoUI=document.createElement('div');photoUI.innerHTML='<div class="v11-actions"><button class="btn" id="v11AddPhotoUpload" type="button">＋ Add Gallery • unggah foto</button><button class="btn primary" id="v21ToggleBulkCloudGen" type="button" style="background:linear-gradient(135deg,#0284c7,#059669);border-color:#6ee7b7;color:#fff">☁️ Generator Link Foto Folder Massal</button><button class="btn" id="v11AddPhotoUrl" type="button">＋ 1 URL foto</button><button class="btn" id="v11ReducePhoto" type="button">− Reduce Gallery</button><button class="btn" id="v21ClearAllPhotoUrls" type="button" style="border-color:rgba(251,113,133,.5);color:#fecdd3">🗑️ Hapus Semua URL</button></div>' +
+ '<details id="v21BulkCloudGeneratorPanel" open style="margin:10px 0 12px;padding:12px;border-radius:14px;background:linear-gradient(145deg,rgba(8,25,48,0.95),rgba(12,38,56,0.92));border:1px solid rgba(56,189,248,0.45);box-shadow:0 10px 26px rgba(0,0,0,0.28)">' +
+   '<summary style="cursor:pointer;font:800 12.5px system-ui,sans-serif;color:#7dd3fc;margin-bottom:8px">☁️ Generator Link Foto Cloud Massal (Ketik Nama Folder & Jumlah Foto — Anti Out of Memory!)</summary>' +
+   '<div style="font-size:11.5px;color:#bae6fd;line-height:1.45;margin-bottom:10px">' +
+     'Taruh foto customer di dalam folder Cloudflare / hosting Anda (contoh: <code>public/foto/bayi-junior/1.jpg</code> s/d <code>30.jpg</code>), lalu isi nama folder dan jumlah foto di bawah ini untuk menghasilkan seluruh URL foto otomatis dalam 1 klik tanpa membebani RAM!' +
+   '</div>' +
+   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;margin-bottom:8px">' +
+     '<label class="v123-field" style="margin:0"><span style="font-size:11px;color:#9ef6ff">🌐 Domain / Base URL Hosting Anda:</span>' +
+       '<input type="text" id="v21BulkBaseUrl" placeholder="https://domain-anda.workers.dev" style="font-size:12px;padding:7px 9px">' +
+     '</label>' +
+     '<label class="v123-field" style="margin:0"><span style="font-size:11px;color:#9ef6ff">📁 Nama Folder Foto Customer:</span>' +
+       '<input type="text" id="v21BulkFolder" placeholder="Contoh: foto/bayi-junior" style="font-size:12px;padding:7px 9px">' +
+     '</label>' +
+   '</div>' +
+   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-bottom:8px">' +
+     '<label class="v123-field" style="margin:0"><span style="font-size:11px;color:#9ef6ff">🏷️ Awalan File (Opsional):</span>' +
+       '<input type="text" id="v21BulkPrefix" placeholder="Kosongkan atau foto-" style="font-size:12px;padding:7px 9px">' +
+     '</label>' +
+     '<label class="v123-field" style="margin:0"><span style="font-size:11px;color:#9ef6ff">🔢 Nomor Awal:</span>' +
+       '<input type="number" id="v21BulkStartNum" value="1" min="0" max="9999" style="font-size:12px;padding:7px 9px">' +
+     '</label>' +
+     '<label class="v123-field" style="margin:0"><span style="font-size:11px;color:#fde68a;font-weight:800">📸 Jumlah Foto (Nomor Akhir):</span>' +
+       '<input type="number" id="v21BulkEndNum" value="20" min="1" max="1000" style="font-size:12px;padding:7px 9px;border-color:#fbbf24">' +
+     '</label>' +
+     '<label class="v123-field" style="margin:0"><span style="font-size:11px;color:#9ef6ff">0️⃣ Format Angka:</span>' +
+       '<select id="v21BulkPadMode" style="font-size:12px;padding:7px 9px">' +
+         '<option value="1">1, 2, 3 ... (Tanpa Nol)</option>' +
+         '<option value="2">01, 02, 03 ... (2 Digit)</option>' +
+         '<option value="3">001, 002, 003 ... (3 Digit)</option>' +
+       '</select>' +
+     '</label>' +
+     '<label class="v123-field" style="margin:0"><span style="font-size:11px;color:#9ef6ff">🖼️ Ekstensi Foto:</span>' +
+       '<select id="v21BulkExt" style="font-size:12px;padding:7px 9px">' +
+         '<option value=".jpg">.jpg</option>' +
+         '<option value=".jpeg">.jpeg</option>' +
+         '<option value=".webp">.webp</option>' +
+         '<option value=".png">.png</option>' +
+         '<option value=".JPG">.JPG (Huruf Besar)</option>' +
+         '<option value=".PNG">.PNG (Huruf Besar)</option>' +
+       '</select>' +
+     '</label>' +
+   '</div>' +
+   '<div id="v21BulkPreviewBox" style="padding:8px 10px;border-radius:10px;background:rgba(4,12,24,0.88);border:1px dashed rgba(110,243,255,0.35);font:600 11px/1.45 monospace;color:#a7f3d0;margin-bottom:9px;word-break:break-all"></div>' +
+   '<div style="display:flex;gap:7px;flex-wrap:wrap">' +
+     '<button type="button" class="btn primary" id="v21ApplyBulkReplaceBtn" style="flex:1;min-width:190px;padding:8px 12px;font-size:11.5px;background:linear-gradient(135deg,#059669,#0284c7);border-color:#6ee7b7">⚡ Buat & Pasang Semua Link Foto (Ganti Daftar)</button>' +
+     '<button type="button" class="btn" id="v21ApplyBulkAppendBtn" style="padding:8px 12px;font-size:11.5px;border-color:#38bdf8;color:#bae6fd">➕ Tambahkan ke Daftar yang Ada</button>' +
+   '</div>' +
+   '<details style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1)">' +
+     '<summary style="cursor:pointer;font-size:11px;color:#cbd5e1">📋 Atau Tempel (Paste) Daftar Link Foto sekaligus dari PostImages / Imgur / Cloud lain</summary>' +
+     '<textarea id="v21BulkRawPasteArea" rows="3" placeholder="Tempel banyak link https://... (satu baris satu link) di sini..." style="width:100%;margin-top:6px;font-size:11.5px;padding:8px;border-radius:8px;background:#06101e;color:#fff;border:1px solid #2b4c6f"></textarea>' +
+     '<button type="button" class="btn" id="v21ApplyRawPasteBtn" style="margin-top:6px;width:100%;padding:7px 10px;font-size:11.5px;border-color:#a7f3d0;color:#a7f3d0">📥 Masukkan Semua Link yang Ditempel</button>' +
+   '</details>' +
+ '</details>' +
+ '<div id="v11PhotoCount" class="note" role="status"></div><div id="v11PhotoUrlHost"></div>';$('experiencePhotoList').before(photoUI);$('v11PhotoUrlHost').append($('v11PhotoUrlList'));
+ (() => {
+   const baseInp = $('v21BulkBaseUrl');
+   const folderInp = $('v21BulkFolder');
+   const prefixInp = $('v21BulkPrefix');
+   const startInp = $('v21BulkStartNum');
+   const endInp = $('v21BulkEndNum');
+   const padSel = $('v21BulkPadMode');
+   const extSel = $('v21BulkExt');
+   const prevBox = $('v21BulkPreviewBox');
+   const drawer = $('v21BulkCloudGeneratorPanel');
+
+   try {
+     const savedBase = localStorage.getItem('wypha_v21_cloud_base_url') || '';
+     const defaultOrigin = (location.protocol === 'http:' || location.protocol === 'https:') ? location.origin : 'https://nama-domain-anda.workers.dev';
+     baseInp.value = savedBase || defaultOrigin;
+     const savedFolder = localStorage.getItem('wypha_v21_cloud_folder') || '';
+     if (savedFolder) folderInp.value = savedFolder;
+   } catch (e) {}
+
+   const buildGeneratedUrls = () => {
+     let base = String(baseInp.value || '').trim().replace(/\/+$/, '');
+     if (!base) base = (location.protocol === 'http:' || location.protocol === 'https:') ? location.origin : 'https://nama-domain-anda.workers.dev';
+     const folder = String(folderInp.value || '').trim().replace(/^\/+|\/+$/g, '');
+     const prefix = String(prefixInp.value || '').trim();
+     const start = Math.max(0, parseInt(startInp.value, 10) || 1);
+     const end = Math.max(start, Math.min(start + 999, parseInt(endInp.value, 10) || start));
+     const padLen = parseInt(padSel.value, 10) || 1;
+     const ext = String(extSel.value || '.jpg');
+     const pathPrefix = folder ? `${base}/${folder}/` : `${base}/`;
+     const out = [];
+     for (let n = start; n <= end; n++) {
+       const numStr = padLen > 1 ? String(n).padStart(padLen, '0') : String(n);
+       out.push(`${pathPrefix}${prefix}${numStr}${ext}`);
+     }
+     return out;
+   };
+
+   const updateBulkPreview = () => {
+     const list = buildGeneratedUrls();
+     try {
+       if (baseInp.value.trim()) localStorage.setItem('wypha_v21_cloud_base_url', baseInp.value.trim());
+       if (folderInp.value.trim()) localStorage.setItem('wypha_v21_cloud_folder', folderInp.value.trim());
+     } catch (e) {}
+     if (!list.length) {
+       prevBox.textContent = 'Isi nomor awal dan akhir untuk melihat pratinjau link.';
+       return;
+     }
+     prevBox.innerHTML =
+       `✓ Akan membuat <strong>${list.length} link foto</strong>:<br>` +
+       `• Foto #1: <code>${list[0]}</code><br>` +
+       (list.length > 1 ? `• Foto #${list.length}: <code>${list[list.length - 1]}</code>` : '');
+   };
+
+   [baseInp, folderInp, prefixInp, startInp, endInp, padSel, extSel].forEach(el => {
+     el?.addEventListener('input', updateBulkPreview);
+     el?.addEventListener('change', updateBulkPreview);
+   });
+   updateBulkPreview();
+
+   $('v21ToggleBulkCloudGen').onclick = () => {
+     drawer.open = !drawer.open;
+     if (drawer.open) folderInp?.focus();
+   };
+
+   const applyUrlsToProject = (newUrls, appendMode = false) => {
+     const valid = newUrls.map(u => String(u || '').trim()).filter(u => suiteSafeUrl(u, 'image'));
+     if (!valid.length) {
+       suiteToast('⚠ Pastikan Domain diawali https:// atau http:// yang valid.');
+       return;
+     }
+     v122RecordHistory();
+     const existing = appendMode
+       ? photos.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean)
+       : [];
+     const merged = [...existing];
+     for (const u of valid) {
+       if (!merged.includes(u)) merged.push(u);
+     }
+     photos.value = merged.join('\n');
+     renderV11PhotoUrls();
+     v126RenderMedia();
+     v11Changed();
+     suiteToast(`✓ ${valid.length} link foto Cloud berhasil dipasang (Total: ${merged.length} URL foto)!`);
+   };
+
+   $('v21ApplyBulkReplaceBtn').onclick = () => applyUrlsToProject(buildGeneratedUrls(), false);
+   $('v21ApplyBulkAppendBtn').onclick = () => applyUrlsToProject(buildGeneratedUrls(), true);
+
+   $('v21ApplyRawPasteBtn').onclick = () => {
+     const raw = ($('v21BulkRawPasteArea')?.value || '').split(/[\r\n,]+/).map(x => x.trim()).filter(Boolean);
+     if (!raw.length) {
+       suiteToast('⚠ Tempelkan minimal 1 link foto terlebih dahulu.');
+       return;
+     }
+     applyUrlsToProject(raw, true);
+     $('v21BulkRawPasteArea').value = '';
+   };
+
+   $('v21ClearAllPhotoUrls').onclick = () => {
+     const existing = photos.value.split(/\r?\n/).filter(x => x.trim());
+     if (!existing.length) return suiteToast('Daftar URL foto sudah kosong.');
+     if (!confirm(`Hapus seluruh ${existing.length} URL foto dari proyek ini?`)) return;
+     v122RecordHistory();
+     photos.value = '';
+     renderV11PhotoUrls();
+     v126RenderMedia();
+     v11Changed();
+     suiteToast('✓ Seluruh URL foto telah dikosongkan.');
+   };
+ })();
  $('v11AddPhotoUpload').onclick=()=>$('experiencePhotoUpload').click();$('v11AddPhotoUrl').onclick=()=>{const row=document.createElement('div');row.className='v11-media-row';const input=document.createElement('input');input.type='url';input.placeholder='Tempel URL foto baru';input.setAttribute('aria-label','URL foto baru');const add=document.createElement('button');add.className='btn';add.type='button';add.textContent='Tambahkan';const commit=()=>{const value=input.value.trim();if(!value)return;if(!suiteSafeUrl(value,'image'))return suiteToast('Gunakan URL gambar publik http/https.');photos.value=[photos.value,value].filter(Boolean).join('\n');renderV11PhotoUrls();v11Changed()};add.onclick=commit;input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();commit()}};row.append(input,add);$('v11PhotoUrlList').append(row);input.focus()};
  $('v11ReducePhoto').onclick=()=>{let urls=photos.value.split(/\r?\n/).filter(x=>x.trim());if(urls.length){urls.pop();photos.value=urls.join('\n')}else if(suiteUploadedPhotos.length)suiteUploadedPhotos.pop();renderSuitePhotos();renderV11PhotoUrls();v11Changed()};
  const renderPhotos=renderSuitePhotos;renderSuitePhotos=function(){renderPhotos();renderV11PhotoUrls()};
