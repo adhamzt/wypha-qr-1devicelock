@@ -120,6 +120,9 @@
     <p>Halaman ringan ini membaca database penyimpanan lokal browser (<code>wyphaMagicQRDB</code>) secara langsung <strong>tanpa membuka editor Studio yang berat</strong>. Gunakan halaman ini untuk mengekspor proyek ke File Explorer (<code>.qfs.json</code>) atau merampingkan ukuran foto proyek agar tidak mengalami crash memori (<em>"Yah! Terjadi masalah sewaktu menampilkan halaman web ini"</em>).</p>
     <div class="top-actions">
       <a class="btn primary" href="./index.html?rescue=1">⬅️ Buka Studio dalam Mode Aman</a>
+      <button type="button" class="btn" id="rescueImportJsonBtn">＋ Import Project JSON</button>
+      <input type="file" id="rescueImportJsonInput" accept=".json,.qfs.json,application/json,text/plain" hidden>
+      <button type="button" class="btn" id="rescueBackupAllBtn">⬇ Backup Semua Proyek</button>
       <button type="button" class="btn amber" id="optimizeAllBtn">⚡ Rampingkan Semua Foto Proyek di Database (Anti-Crash)</button>
       <button type="button" class="btn" id="refreshBtn">🔄 Muat Ulang Daftar</button>
     </div>
@@ -339,6 +342,72 @@ async function renderList() {
 }
 
 document.getElementById('refreshBtn').onclick = renderList;
+document.getElementById('rescueImportJsonBtn').onclick = () => {
+  const inp = document.getElementById('rescueImportJsonInput');
+  inp.value = '';
+  inp.click();
+};
+document.getElementById('rescueImportJsonInput').onchange = async e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  try {
+    setStatus('⏳ Mengimpor file JSON: ' + f.name + '...');
+    const obj = JSON.parse(await f.text());
+    const list = Array.isArray(obj.projects) ? obj.projects : [obj];
+    let n = 0;
+    for (const item of list) {
+      const proj = item.project || item;
+      if (!proj || typeof proj !== 'object') continue;
+      const id = item.id || ('project-' + Date.now().toString(36) + '-' + n);
+      const name = item.name || proj.experience?.name || proj.dynamic?.customerName || f.name.replace(/\.qfs\.json$|\.json$/i, '');
+      await putSingleRecord({
+        id,
+        name,
+        sourceLabel: 'Imported via Rescue Mode',
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        project: proj
+      });
+      n++;
+    }
+    await renderList();
+    setStatus('✓ ' + n + ' proyek JSON berhasil diimpor ke database!');
+  } catch (err) {
+    setStatus('⚠ Gagal mengimpor JSON: ' + (err.message || err));
+  }
+  e.target.value = '';
+};
+document.getElementById('rescueBackupAllBtn').onclick = async () => {
+  try {
+    const items = await listProjectMetadata();
+    if (!items.length) {
+      setStatus('⚠ Belum ada proyek di database untuk di-backup.');
+      return;
+    }
+    const parts = ['{\n  "app": "WYPHA Magic QR",\n  "version": 21,\n  "exportedAt": ', JSON.stringify(new Date().toISOString()), ',\n  "projects": [\n'];
+    let added = 0;
+    for (const it of items) {
+      const rec = await getSingleRecord(it.id);
+      if (!rec) continue;
+      if (added > 0) parts.push(',\n');
+      parts.push(JSON.stringify(rec));
+      added++;
+    }
+    parts.push('\n  ]\n}');
+    const blob = new Blob(parts, { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'WYPHA-MAGIC-QR-BACKUP-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    setStatus('✓ Backup ' + added + ' proyek berhasil diunduh!');
+  } catch (err) {
+    setStatus('⚠ Gagal mem-backup proyek: ' + (err.message || err));
+  }
+};
 document.getElementById('optimizeAllBtn').onclick = async () => {
   const items = await listProjectMetadata();
   for (const it of items) {

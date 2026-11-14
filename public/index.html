@@ -149,10 +149,16 @@ button{cursor:pointer}
 .btn.primary{border:0;background:linear-gradient(90deg,var(--cyan),var(--violet),var(--pink));color:#07101b}
 .btn.good{border-color:rgba(140,243,185,.45);color:#baffd3}
 .btn.ghost{background:transparent}
-.layout{display:grid;grid-template-columns:minmax(360px,470px) minmax(0,1fr);min-height:calc(100vh - 66px)}
+.layout{display:grid;grid-template-columns:minmax(360px,470px) minmax(0,1fr);min-height:calc(100vh - var(--v123-top, 66px));align-items:start}
 .sidebar{
-  border-right:1px solid rgba(99,231,255,.12);padding:16px;overflow:auto;max-height:calc(100vh - 66px);
-  position:sticky;top:66px
+  border-right:1px solid rgba(99,231,255,.12);padding:16px;overflow-y:auto;overflow-x:hidden;
+  max-height:calc(100vh - var(--v123-top, 66px));
+  position:sticky;top:var(--v123-top, 66px);z-index:20
+}
+.topbar{position:relative !important;top:auto !important;z-index:30}
+.offline-install-panel{position:relative !important;top:auto !important;z-index:1}
+@media(max-width:1050px){
+  .sidebar{position:static !important;top:auto !important;max-height:none !important;overflow:visible !important}
 }
 .workspace{padding:18px;min-width:0}
 .card{
@@ -704,7 +710,7 @@ html.v1261-editor:not([data-editor-palette=dark]):not([data-editor-palette=fresh
     </div>
     <div class="top-actions">
       <button class="btn ghost" id="saveProjectBtn">Save Project</button>
-      <label class="btn ghost" style="cursor:pointer">Load Project<input id="loadProjectInput" type="file" accept=".json" hidden></label>
+      <button class="btn ghost" id="loadProjectBtn" type="button">Load Project</button><input id="loadProjectInput" type="file" accept=".json,.qfs.json,application/json,text/plain" hidden>
       <button class="btn" id="smartRemixTopBtn">🎲 Smart Remix</button>
       <button class="btn" id="smartDecorTopBtn">✨ Decor Remix</button>
       <button class="btn" id="placementTopBtn">✦ Placement Lab</button>
@@ -725,10 +731,13 @@ html.v1261-editor:not([data-editor-palette=dark]):not([data-editor-palette=fresh
         <div class="project-vault-head"><div><strong>📁 Proyek Saya & Migrasi</strong><small>Simpan proyek di PWA ini dan pindahkan HTML customer dari versi lama.</small></div><span class="project-vault-badge" id="projectVaultCount">0 proyek</span></div>
         <div class="project-vault-actions">
           <button class="btn good" id="saveDeviceProjectBtn" type="button">💾 Simpan ke Proyek Saya</button>
-          <label class="btn primary" style="cursor:pointer;text-align:center">↗ Import HTML Proyek Lama<input id="legacyProjectInput" type="file" accept=".html,.htm,text/html" hidden></label>
-          <label class="btn ghost" style="cursor:pointer;text-align:center">＋ Import Project JSON<input id="deviceProjectJsonInput" type="file" accept=".json,.qfs.json" hidden></label>
-           <button class="btn ghost" id="backupDeviceProjectsBtn" type="button">⬇ Backup Semua Proyek</button>
-         </div>
+          <button class="btn primary" id="legacyProjectBtn" type="button" style="text-align:center">↗ Import HTML Proyek Lama</button>
+          <input id="legacyProjectInput" type="file" accept=".html,.htm,text/html" hidden>
+          <button class="btn ghost" id="deviceProjectJsonBtn" type="button" style="text-align:center">＋ Import Project JSON</button>
+          <input id="deviceProjectJsonInput" type="file" accept=".json,.qfs.json,application/json,text/plain" hidden>
+          <button class="btn ghost" id="backupDeviceProjectsBtn" type="button">⬇ Backup Semua Proyek</button>
+        </div>
+        <div id="projectVaultActionStatus" class="note" role="status" aria-live="polite" style="margin-top:8px;padding:9px 11px;border-radius:10px;border:1px solid rgba(99,231,255,.35);background:rgba(12,28,48,.88);color:#dff6ff;font-weight:700;display:none"></div>
          <div class="field"><label for="localProjectName">Nama proyek aktif</label><input id="localProjectName" type="text" placeholder="Contoh: Birthday Rania"></div>
          <div class="project-vault-actions"><button class="btn primary" id="newProjectSnapshotBtn" type="button">Simpan Sebagai Proyek Baru</button><button class="btn" id="resetNewProjectBtn" type="button">↻ Reset untuk Proyek Baru</button></div>
          <div id="resetProjectNotice" class="note" role="status" aria-live="polite">Reset menghapus perubahan yang belum disimpan. Proyek tersimpan dan ikon bawaan tetap tersedia.</div>
@@ -2170,7 +2179,7 @@ function initBusinessSuite(){
  suiteEl("useShareUrlBtn").addEventListener("click",function(){var u=suiteEl("publicShareUrl").value.trim();if(!u)return suiteToast("Isi Public Share URL terlebih dahulu.");suiteSet("qrTargetUrl",u);generateSuiteQr()});
  suiteEl("testOrderBtn").addEventListener("click",testSuiteOrder);
  suiteEl("saveLocalProjectBtn").addEventListener("click",function(){persistLocalProject(false)});suiteEl("newProjectSnapshotBtn").addEventListener("click",function(){persistLocalProject(true)});suiteEl("loadLocalProjectBtn").addEventListener("click",loadLocalProject);suiteEl("deleteLocalProjectBtn").addEventListener("click",deleteLocalProject);
- document.querySelector(".app").addEventListener("change",scheduleSuiteAutosave);
+ document.querySelector(".app").addEventListener("change",function(e){if(!e||!e.target||e.target.type==="file"||e.target.id==="localProjectList"||e.target.id==="projectVaultFilter"||e.target.id==="projectVaultSearch"||e.target.closest("#assetlabTab,#placementTab"))return;scheduleSuiteAutosave()});
 }
 
 function resetBusinessSuiteTemporaryState(){
@@ -2186,6 +2195,7 @@ function resetBusinessSuiteTemporaryState(){
  return suiteAutoSaveWrite.catch(function(){});
 }
 window.resetBusinessSuiteTemporaryState=resetBusinessSuiteTemporaryState;
+window.stripDuplicateOriginalSrcInProject=stripDuplicateOriginalSrcInProject;
 window.refreshLocalProjectList=refreshLocalProjectList;
 window.EXPERIENCE_PRESETS=EXPERIENCE_PRESETS;
 window.captureExperienceState=captureExperienceState;
@@ -2907,9 +2917,12 @@ function b64ToUtf8(b64){
  return new TextDecoder("utf-8").decode(bytes);
 }
 function downloadText(name,text,type="text/html"){
- const blob=new Blob([text],{type:type+";charset=utf-8"});
- const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();
- setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+ const blob=text instanceof Blob?text:new Blob([text],{type:type+";charset=utf-8"});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");a.href=url;a.download=name||"download";a.style.display="none";
+ document.body.appendChild(a);a.click();
+ setTimeout(()=>{try{a.remove()}catch(e){}},500);
+ setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 function safeFileName(){
  let n=$("fileName").value.trim()||"QR-FANTASY.html";
@@ -4450,44 +4463,44 @@ function generateHTML(options={}){
  const edit=buildEditObject(s);
  const re=/const EDIT = \{[\s\S]*?\n\};/;
  if(!re.test(html))throw new Error("Blok EDIT template tidak ditemukan.");
- html=html.replace(re,edit);
+ html=html.replace(re,()=>edit);
  if(s.product==="baby")html=patchBabyBrand(html,s);
  html=optimizeVideoIframes(html);
 
- html=html.replace("</head>",fontInjection(s)+nameStyleInjection(s)+frameInjection(s)+layoutInjection(s)+moodInjection(s)+displayModeInjection(s)+performanceInjection(s)+heroBackgroundInjection(s)+stageLightInjection(s)+`\n<style id="qfs-custom-css">${s.customCSS||""}</style>\n</head>`);
+ html=html.replace("</head>",()=>fontInjection(s)+nameStyleInjection(s)+frameInjection(s)+layoutInjection(s)+moodInjection(s)+displayModeInjection(s)+performanceInjection(s)+heroBackgroundInjection(s)+stageLightInjection(s)+`\n<style id="qfs-custom-css">${s.customCSS||""}</style>\n</head>`);
 
  let extras=customBlocksHTML(s);
  if(s.customHTML)extras+=`\n${s.customHTML}`;
  if(extras){
-  if(html.includes("</main>"))html=html.replace("</main>",extras+"\n</main>");
-  else html=html.replace("</body>",extras+"\n</body>");
+  if(html.includes("</main>"))html=html.replace("</main>",()=>extras+"\n</main>");
+  else html=html.replace("</body>",()=>extras+"\n</body>");
  }
 
  const shareMarkup=shareCenterInjection(s);
  if(shareMarkup){
    if(s.share.position==="before-footer" && html.includes("<footer")){
-     html=html.replace("<footer",shareMarkup+"\n<footer");
+     html=html.replace("<footer",()=>shareMarkup+"\n<footer");
    }else if(html.includes("</main>")){
-     html=html.replace("</main>",shareMarkup+"\n</main>");
+     html=html.replace("</main>",()=>shareMarkup+"\n</main>");
    }else{
-     html=html.replace("</body>",shareMarkup+"\n</body>");
+     html=html.replace("</body>",()=>shareMarkup+"\n</body>");
    }
  }
 
- const decorMarkup=decorationInjection(s);if(decorMarkup)html=html.replace("</body>",decorMarkup+"\n</body>");
- const aiFrames=aiFrameArtInjection(s);if(aiFrames)html=html.replace("</body>",aiFrames+"\n</body>");
- const universalTuner=textFrameTunerInjection(s);if(universalTuner)html=html.replace("</body>",universalTuner+"\n</body>");
- const placementMarkup=sitePlacementInjection(s);if(placementMarkup)html=html.replace("</body>",placementMarkup+"\n</body>");
- const businessMarkup=businessSuiteInjection(s);if(businessMarkup){if(html.includes("<footer"))html=html.replace("<footer",businessMarkup+"\n<footer");else if(html.includes("</main>"))html=html.replace("</main>",businessMarkup+"\n</main>");else html=html.replace("</body>",businessMarkup+"\n</body>")}
- const wowMarkup=signatureWowInjection(s);if(wowMarkup)html=html.replace("</body>",wowMarkup+"\n</body>");
- const smartNames=smartNameLayoutInjection(s);if(smartNames)html=html.replace("</body>",smartNames+"\n</body>");
- const textColors=textColorInjection(s);if(textColors)html=html.replace("</body>",textColors+"\n</body>");
- if(s.customJS)html=html.replace("</body>",`<script id="qfs-custom-js">${s.customJS.replace(/<\/script/gi,"<\\/script")}<\/script>\n</body>`);
+ const decorMarkup=decorationInjection(s);if(decorMarkup)html=html.replace("</body>",()=>decorMarkup+"\n</body>");
+ const aiFrames=aiFrameArtInjection(s);if(aiFrames)html=html.replace("</body>",()=>aiFrames+"\n</body>");
+ const universalTuner=textFrameTunerInjection(s);if(universalTuner)html=html.replace("</body>",()=>universalTuner+"\n</body>");
+ const placementMarkup=sitePlacementInjection(s);if(placementMarkup)html=html.replace("</body>",()=>placementMarkup+"\n</body>");
+ const businessMarkup=businessSuiteInjection(s);if(businessMarkup){if(html.includes("<footer"))html=html.replace("<footer",()=>businessMarkup+"\n<footer");else if(html.includes("</main>"))html=html.replace("</main>",()=>businessMarkup+"\n</main>");else html=html.replace("</body>",()=>businessMarkup+"\n</body>")}
+ const wowMarkup=signatureWowInjection(s);if(wowMarkup)html=html.replace("</body>",()=>wowMarkup+"\n</body>");
+ const smartNames=smartNameLayoutInjection(s);if(smartNames)html=html.replace("</body>",()=>smartNames+"\n</body>");
+ const textColors=textColorInjection(s);if(textColors)html=html.replace("</body>",()=>textColors+"\n</body>");
+ if(s.customJS)html=html.replace("</body>",()=>`<script id="qfs-custom-js">${s.customJS.replace(/<\/script/gi,"<\\/script")}<\/script>\n</body>`);
 
- html=html.replace("</body>",v6OutputInjection(s)+v7Output(s)+typographyInjection(s)+'<script type="application/json" id="wypha-project-data">'+JSON.stringify(v6PublicProject(savedState)).replace(/</g,"\\u003c")+'<\/script>\n</body>');
+ html=html.replace("</body>",()=>v6OutputInjection(s)+v7Output(s)+typographyInjection(s)+'<script type="application/json" id="wypha-project-data">'+JSON.stringify(v6PublicProject(savedState)).replace(/</g,"\\u003c")+'<\/script>\n</body>');
  html=v71Finalize(html,s);
- html=html.replace("</body>",v11Output(s)+v122Output(s)+v12Output(s)+v124Output(s)+v123Output(s)+v125Output(s)+v126Output(s)+v1264Output(s)+v1265Output(s)+v127Output(s)+v128Output(s)+v129Output(s)+v1210Output(s)+v13Output(s)+"\n</body>");
- html=v123Head(html,s);html=html.replace('</head>',v143MasterHeadBoot(s)+v1263BadgeOutput(s)+'</head>');
+ html=html.replace("</body>",()=>v11Output(s)+v122Output(s)+v12Output(s)+v124Output(s)+v123Output(s)+v125Output(s)+v126Output(s)+v1264Output(s)+v1265Output(s)+v127Output(s)+v128Output(s)+v129Output(s)+v1210Output(s)+v13Output(s)+"\n</body>");
+ html=v123Head(html,s);html=html.replace('</head>',()=>v143MasterHeadBoot(s)+v1263BadgeOutput(s)+'</head>');
  if(!options?.noCommit){generatedHTML=html;const co=$("codeOutput");if(co){co.value=html.length>220000?`/* [MODE HEMAT MEMORI AKTIF — Ukuran HTML: ${(html.length/1048576).toFixed(2)} MB]\n   Kode HTML penuh telah disimpan di memori siap unduh.\n   Gunakan tombol "Download HTML", "Ekspor ZIP Web Ringan", atau "Copy Code" untuk mengambil file utuh tanpa membuat browser HP berat. */\n`+html.slice(0,4000)+"\n...":html;}}
  return html;
 }
@@ -4515,14 +4528,183 @@ function currentCode(){return generateHTML()}
    - Legacy HTML is parsed as data; the selected page itself is never executed.
    ============================================================ */
 const QFS_PROJECT_DB="wyphaMagicQRDB",QFS_PROJECT_STORE="projects",QFS_PROJECT_DB_VERSION=1;
-function qfsProjectDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(QFS_PROJECT_DB,QFS_PROJECT_DB_VERSION);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(QFS_PROJECT_STORE)){const s=db.createObjectStore(QFS_PROJECT_STORE,{keyPath:"id"});s.createIndex("updatedAt","updatedAt")}};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
-async function qfsProjectPut(record){const db=await qfsProjectDB();return new Promise((resolve,reject)=>{const tx=db.transaction(QFS_PROJECT_STORE,"readwrite");tx.objectStore(QFS_PROJECT_STORE).put(record);tx.oncomplete=()=>{db.close();resolve(record)};tx.onerror=()=>{db.close();reject(tx.error)}})}
-async function qfsProjectGet(id){const db=await qfsProjectDB();return new Promise((resolve,reject)=>{const tx=db.transaction(QFS_PROJECT_STORE,"readonly"),req=tx.objectStore(QFS_PROJECT_STORE).get(id);req.onsuccess=()=>{db.close();resolve(req.result||null)};req.onerror=()=>{db.close();reject(req.error)}})}
-async function qfsProjectMetaAll(){const db=await qfsProjectDB();return new Promise((resolve,reject)=>{const out=[];const tx=db.transaction(QFS_PROJECT_STORE,"readonly"),req=tx.objectStore(QFS_PROJECT_STORE).openCursor();req.onsuccess=e=>{const cur=e.target.result;if(cur){const v=cur.value||{};out.push({id:v.id,name:v.name||qfsProjectName(v.project),sourceLabel:v.sourceLabel||"",createdAt:v.createdAt||"",updatedAt:v.updatedAt||"",project:{product:v.project?.product||"baby",theme:v.project?.theme||"",dynamic:{customerName:v.project?.dynamic?.customerName||""},experience:{type:v.project?.experience?.type||v.project?.product||"baby",name:v.project?.experience?.name||""}}});cur.continue();}else{db.close();resolve(out.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))));}};req.onerror=()=>{db.close();reject(req.error);}});}
-async function qfsProjectAll(){const db=await qfsProjectDB();return new Promise((resolve,reject)=>{const tx=db.transaction(QFS_PROJECT_STORE,"readonly"),req=tx.objectStore(QFS_PROJECT_STORE).getAll();req.onsuccess=()=>{db.close();resolve((req.result||[]).sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))))};req.onerror=()=>{db.close();reject(req.error)}})}
-async function qfsProjectDelete(id){const db=await qfsProjectDB();return new Promise((resolve,reject)=>{const tx=db.transaction(QFS_PROJECT_STORE,"readwrite");tx.objectStore(QFS_PROJECT_STORE).delete(id);tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>{db.close();reject(tx.error)}})}
+const __wyphaMemoryVault=new Map();
+function qfsVaultStatus(message,tone="good"){
+ const text=String(message||"");
+ const box=$("projectVaultActionStatus");
+ if(box){
+  box.style.display=text?"block":"none";
+  if(tone==="warn"||tone==="error"){
+   box.style.borderColor="rgba(251,113,133,.65)";
+   box.style.background="rgba(69,16,32,.92)";
+   box.style.color="#ffe4e6";
+  }else if(tone==="info"){
+   box.style.borderColor="rgba(99,231,255,.55)";
+   box.style.background="rgba(12,32,58,.92)";
+   box.style.color="#e0f2fe";
+  }else{
+   box.style.borderColor="rgba(52,211,153,.65)";
+   box.style.background="rgba(6,48,38,.92)";
+   box.style.color="#d1fae5";
+  }
+  box.textContent=text;
+ }
+ const st=$("status");
+ if(st&&text){
+  st.className=tone==="warn"||tone==="error"?"status warn":"status good";
+  st.textContent=text;
+ }
+ const quickSt=$("v123SaveStatus");
+ if(quickSt&&text){
+  quickSt.textContent=text.replace(/^[✓⚠⏳]\s*/,"").slice(0,90);
+  quickSt.dataset.state=tone==="warn"||tone==="error"?"error":"saved";
+ }
+ if(typeof suiteToast==="function"&&text)suiteToast(text);
+}
+window.qfsVaultStatus=qfsVaultStatus;
+function qfsProjectDB(){
+ return new Promise((resolve,reject)=>{
+  let settled=false;
+  const done=(fn,val)=>{if(settled)return;settled=true;clearTimeout(timer);fn(val)};
+  const timer=setTimeout(()=>done(reject,new Error("IndexedDB timeout")),2500);
+  try{
+   const req=indexedDB.open(QFS_PROJECT_DB,QFS_PROJECT_DB_VERSION);
+   req.onupgradeneeded=()=>{
+    const db=req.result;
+    if(!db.objectStoreNames.contains(QFS_PROJECT_STORE)){
+     const s=db.createObjectStore(QFS_PROJECT_STORE,{keyPath:"id"});
+     s.createIndex("updatedAt","updatedAt");
+    }
+   };
+   req.onsuccess=()=>done(resolve,req.result);
+   req.onerror=()=>done(reject,req.error||new Error("IndexedDB error"));
+   req.onblocked=()=>done(reject,new Error("IndexedDB blocked"));
+  }catch(err){done(reject,err)}
+ });
+}
+async function qfsProjectPut(record){
+ if(record&&record.id)__wyphaMemoryVault.set(record.id,record);
+ try{
+  const db=await qfsProjectDB();
+  return await new Promise((resolve,reject)=>{
+   const tx=db.transaction(QFS_PROJECT_STORE,"readwrite");
+   tx.objectStore(QFS_PROJECT_STORE).put(record);
+   tx.oncomplete=()=>{db.close();resolve(record)};
+   tx.onerror=()=>{db.close();reject(tx.error)};
+   tx.onabort=()=>{db.close();reject(tx.error||new Error("Transaksi penyimpanan dibatalkan"))};
+  });
+ }catch(err){
+  console.warn("qfsProjectPut fallback to memory vault:",err);
+  return record;
+ }
+}
+async function qfsProjectGet(id){
+ try{
+  const db=await qfsProjectDB();
+  const res=await new Promise((resolve,reject)=>{
+   const tx=db.transaction(QFS_PROJECT_STORE,"readonly"),req=tx.objectStore(QFS_PROJECT_STORE).get(id);
+   req.onsuccess=()=>{db.close();resolve(req.result||null)};
+   req.onerror=()=>{db.close();reject(req.error)};
+  });
+  if(res)return res;
+ }catch(err){}
+ return __wyphaMemoryVault.get(id)||null;
+}
+async function qfsProjectMetaAll(){
+ const byId=new Map();
+ for(const [k,v] of __wyphaMemoryVault.entries()){
+  if(v&&v.id)byId.set(k,{id:v.id,name:v.name||qfsProjectName(v.project),sourceLabel:v.sourceLabel||"",createdAt:v.createdAt||"",updatedAt:v.updatedAt||"",project:{product:v.project?.product||"baby",theme:v.project?.theme||"",dynamic:{customerName:v.project?.dynamic?.customerName||""},experience:{type:v.project?.experience?.type||v.project?.product||"baby",name:v.project?.experience?.name||""}}});
+ }
+ try{
+  const db=await qfsProjectDB();
+  await new Promise((resolve,reject)=>{
+   const tx=db.transaction(QFS_PROJECT_STORE,"readonly"),req=tx.objectStore(QFS_PROJECT_STORE).openCursor();
+   req.onsuccess=e=>{
+    const cur=e.target.result;
+    if(cur){
+     const v=cur.value||{};
+     if(v.id){
+      byId.set(v.id,{id:v.id,name:v.name||qfsProjectName(v.project),sourceLabel:v.sourceLabel||"",createdAt:v.createdAt||"",updatedAt:v.updatedAt||"",project:{product:v.project?.product||"baby",theme:v.project?.theme||"",dynamic:{customerName:v.project?.dynamic?.customerName||""},experience:{type:v.project?.experience?.type||v.project?.product||"baby",name:v.project?.experience?.name||""}}});
+     }
+     cur.continue();
+    }else{
+     db.close();resolve();
+    }
+   };
+   req.onerror=()=>{db.close();reject(req.error)};
+  });
+ }catch(err){}
+ return [...byId.values()].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+async function qfsProjectAll(){
+ const byId=new Map();
+ for(const [k,v] of __wyphaMemoryVault.entries()){if(v&&v.id)byId.set(k,v);}
+ try{
+  const db=await qfsProjectDB();
+  const rows=await new Promise((resolve,reject)=>{
+   const tx=db.transaction(QFS_PROJECT_STORE,"readonly"),req=tx.objectStore(QFS_PROJECT_STORE).getAll();
+   req.onsuccess=()=>{db.close();resolve(req.result||[])};
+   req.onerror=()=>{db.close();reject(req.error)};
+  });
+  for(const r of rows){if(r&&r.id)byId.set(r.id,r);}
+ }catch(err){}
+ return [...byId.values()].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+async function qfsProjectDelete(id){
+ __wyphaMemoryVault.delete(id);
+ try{
+  const db=await qfsProjectDB();
+  await new Promise((resolve,reject)=>{
+   const tx=db.transaction(QFS_PROJECT_STORE,"readwrite");
+   tx.objectStore(QFS_PROJECT_STORE).delete(id);
+   tx.oncomplete=()=>{db.close();resolve()};
+   tx.onerror=()=>{db.close();reject(tx.error)};
+  });
+ }catch(err){}
+}
 function qfsProjectId(prefix="project"){return prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8)}
-function qfsProjectName(project){const d=project?.dynamic||{};if(project?.product==="baby")return d.customerName||"Baby Project";if(project?.product==="couple")return[d.nameA,d.nameB].filter(Boolean).join(" & ")||"Couple Project";if(project?.product==="fan")return[d.fanName,d.idolName].filter(Boolean).join(" & ")||"Fans Project";return"WYPHA Project"}
+function stripDuplicateOriginalSrcInProject(proj){
+ if(!proj||typeof proj!=="object")return proj;
+ try{
+  const up=proj.media?.uploadedPhotos;
+  if(Array.isArray(up))up.forEach(p=>{if(p&&p.src&&p.originalSrc&&p.originalSrc.length>=p.src.length)delete p.originalSrc;});
+  const rp=proj.rareStudio?.album?.photos;
+  if(Array.isArray(rp))rp.forEach(p=>{if(p&&p.src&&p.originalSrc&&p.originalSrc.length>=p.src.length)delete p.originalSrc;});
+ }catch(e){}
+ return proj;
+}
+function qfsNormalizeProjectObject(raw){
+ if(!raw||typeof raw!=="object")return null;
+ let proj=raw.project&&typeof raw.project==="object"?raw.project:raw;
+ if(Array.isArray(proj))return null;
+ proj=stripDuplicateOriginalSrcInProject(proj);
+ let prod=String(proj.product||"").trim().toLowerCase();
+ const expType=String(proj.experience?.type||proj.productStudio?.type||prod||"").trim().toLowerCase();
+ if(!DEFAULTS[prod]){
+  if(typeof V124_PROFILES==="object"&&V124_PROFILES[prod])prod=V124_PROFILES[prod].engine;
+  else if(typeof V124_PROFILES==="object"&&V124_PROFILES[expType])prod=V124_PROFILES[expType].engine;
+  else if(proj.dynamic?.fanName||proj.dynamic?.idolName)prod="fan";
+  else if(proj.dynamic?.nameA||proj.dynamic?.nameB)prod="couple";
+  else if(proj.dynamic||proj.experience||proj.studio126||proj.theme||proj.colors)prod="baby";
+ }
+ if(!DEFAULTS[prod])return null;
+ proj.product=prod;
+ if(typeof V124_PROFILES==="object"&&Object.hasOwn(V124_PROFILES,expType)){
+  proj.experience={...(proj.experience||{}),type:expType};
+ }
+ if(!proj.dynamic||typeof proj.dynamic!=="object"){
+  proj.dynamic={...DEFAULTS[prod]};
+ }
+ return proj;
+}
+function qfsProjectName(project){
+ const d=project?.dynamic||{},e=project?.experience||{};
+ if(e.name&&String(e.name).trim())return String(e.name).trim();
+ if(project?.product==="baby")return d.customerName||"Baby Project";
+ if(project?.product==="couple")return[d.nameA,d.nameB].filter(Boolean).join(" & ")||"Couple Project";
+ if(project?.product==="fan")return[d.fanName,d.idolName].filter(Boolean).join(" & ")||"Fans Project";
+ return"WYPHA Project";
+}
 function qfsDateLabel(value){try{return new Intl.DateTimeFormat("id-ID",{dateStyle:"medium",timeStyle:"short"}).format(new Date(value))}catch(e){return String(value||"")}}
 let projectVaultVisible=8;
 function projectVaultIsDraft(r){return r.id==="v6-autosave"||r.id==="v5-autosave"||r.sourceLabel==="Autosave"}
@@ -4530,29 +4712,62 @@ async function renderProjectVault(){
  const root=$("projectVaultList"),count=$("projectVaultCount"),more=$("projectVaultMore");if(!root)return;
  try{
   const all=await qfsProjectMetaAll(),projects=all.filter(r=>!projectVaultIsDraft(r)),drafts=all.filter(projectVaultIsDraft);
-  count.textContent=projects.length+" proyek"+(drafts.length?" • "+drafts.length+" draf":"");
-  const query=$("projectVaultSearch").value.trim().toLocaleLowerCase("id"),filter=$("projectVaultFilter").value;
+  if(count)count.textContent=projects.length+" proyek"+(drafts.length?" • "+drafts.length+" draf":"");
+  const query=($("projectVaultSearch")?.value||"").trim().toLocaleLowerCase("id"),filter=$("projectVaultFilter")?.value||"all";
   const list=all.filter(r=>{
    const draft=projectVaultIsDraft(r);
-   if(filter==="draft"?!draft:draft)return false;
+   if(filter==="draft"?!draft:draft&&projects.length>0)return false;
    if(filter!=="all"&&filter!=="draft"&&r.project?.product!==filter)return false;
    return !query||[r.name,r.sourceLabel,r.project?.theme,r.project?.product].some(v=>String(v||"").toLocaleLowerCase("id").includes(query));
   });
-  $("projectVaultSummary").textContent=list.length+" hasil • tampil "+Math.min(list.length,projectVaultVisible)+" sekaligus";
-  more.hidden=list.length<=projectVaultVisible;
-  root.innerHTML=list.length?list.slice(0,projectVaultVisible).map(r=>`<div class="project-card"><div class="project-card-top"><div><div class="project-card-name">${escapeHTML(r.name||qfsProjectName(r.project))}</div><div class="project-card-meta">${escapeHTML(r.project?.theme||r.sourceLabel||"PWA")} • ${escapeHTML(qfsDateLabel(r.updatedAt))}${r.id===v6ActiveProjectId?" • Sedang dibuka":""}</div></div></div><div class="project-card-actions"><button class="primary" data-qfsp-open="${escAttr(r.id)}">Buka/Edit</button><button data-qfsp-export="${escAttr(r.id)}">Export JSON</button><button class="danger" data-qfsp-delete="${escAttr(r.id)}">Hapus</button></div></div>`).join(""):`<div class="project-empty">${all.length?"Tidak ada proyek yang cocok.":"Belum ada proyek. Mulai mengedit lalu simpan."}</div>`;
-  root.querySelectorAll("[data-qfsp-open]").forEach(b=>b.onclick=async()=>{const r=await qfsProjectGet(b.dataset.qfspOpen);if(r?.project){loadProject(r.project);v6ActiveProjectId=r.id;$("localProjectName").value=r.name;doGenerate();document.querySelector('.tab[data-tab="preview"]')?.click();$("status").className="status good";$("status").textContent="✓ Proyek dibuka dari penyimpanan PWA.";renderProjectVault()}});
-  root.querySelectorAll("[data-qfsp-export]").forEach(b=>b.onclick=async()=>{const r=await qfsProjectGet(b.dataset.qfspExport);if(r)downloadText((r.name||"WYPHA-PROJECT").replace(/[^a-z0-9_-]+/gi,"-")+".qfs.json",JSON.stringify(r.project,null,2),"application/json")});
-  root.querySelectorAll("[data-qfsp-delete]").forEach(b=>b.onclick=async()=>{if(!confirm("Hapus proyek ini dari perangkat?"))return;await qfsProjectDelete(b.dataset.qfspDelete);if(v6ActiveProjectId===b.dataset.qfspDelete)v6ActiveProjectId=null;await renderProjectVault();await window.refreshLocalProjectList()});
+  if($("projectVaultSummary"))$("projectVaultSummary").textContent=list.length+" hasil • tampil "+Math.min(list.length,projectVaultVisible)+" sekaligus";
+  if(more)more.hidden=list.length<=projectVaultVisible;
+  root.innerHTML=list.length?list.slice(0,projectVaultVisible).map(r=>`<div class="project-card"><div class="project-card-top"><div><div class="project-card-name">${escapeHTML(r.name||qfsProjectName(r.project))}</div><div class="project-card-meta">${escapeHTML(r.project?.theme||r.sourceLabel||"PWA")} • ${escapeHTML(qfsDateLabel(r.updatedAt))}${r.id===v6ActiveProjectId?" • Sedang dibuka":""}</div></div></div><div class="project-card-actions"><button type="button" class="primary" data-qfsp-open="${escAttr(r.id)}">Buka/Edit</button><button type="button" data-qfsp-export="${escAttr(r.id)}">Export JSON</button><button type="button" class="danger" data-qfsp-delete="${escAttr(r.id)}">Hapus</button></div></div>`).join(""):`<div class="project-empty">${all.length?"Tidak ada proyek yang cocok.":"Belum ada proyek. Mulai mengedit lalu simpan."}</div>`;
+  root.querySelectorAll("[data-qfsp-open]").forEach(b=>b.onclick=async()=>{
+   const r=await qfsProjectGet(b.dataset.qfspOpen);
+   if(r?.project){
+    loadProject(r.project);
+    v6ActiveProjectId=r.id;
+    if($("localProjectName"))$("localProjectName").value=r.name;
+    if($("localProjectList"))$("localProjectList").value=r.id;
+    document.querySelector('.tab[data-tab="preview"]')?.click();
+    qfsVaultStatus("✓ Proyek \""+(r.name||r.id)+"\" dibuka dari Proyek Saya.","good");
+    renderProjectVault();
+   }
+  });
+  root.querySelectorAll("[data-qfsp-export]").forEach(b=>b.onclick=async()=>{
+   const r=await qfsProjectGet(b.dataset.qfspExport);
+   if(r?.project){
+    const fn=(r.name||"WYPHA-PROJECT").replace(/[^a-z0-9_-]+/gi,"-")+".qfs.json";
+    downloadText(fn,new Blob([JSON.stringify(r.project)],{type:"application/json"}),"application/json");
+    qfsVaultStatus("✓ File JSON proyek \""+fn+"\" berhasil diunduh.","good");
+   }
+  });
+  root.querySelectorAll("[data-qfsp-delete]").forEach(b=>b.onclick=async()=>{
+   if(!confirm("Hapus proyek ini dari perangkat?"))return;
+   await qfsProjectDelete(b.dataset.qfspDelete);
+   if(v6ActiveProjectId===b.dataset.qfspDelete)v6ActiveProjectId=null;
+   await renderProjectVault();
+   await window.refreshLocalProjectList?.();
+   qfsVaultStatus("✓ Proyek telah dihapus dari daftar.","info");
+  });
  }catch(err){root.innerHTML=`<div class="project-empty">Penyimpanan proyek tidak dapat dibuka: ${escapeHTML(err.message||String(err))}</div>`}
 }
 async function saveCurrentProjectToDevice(sourceLabel="Rare Cinematic Studio V21 • Permanent Storage Edition",asNew=false){
- const project=captureForm(),old=!asNew&&v6ActiveProjectId?await qfsProjectGet(v6ActiveProjectId):null;
+ const project=stripDuplicateOriginalSrcInProject(captureForm()),old=!asNew&&v6ActiveProjectId?await qfsProjectGet(v6ActiveProjectId):null;
  if(old?.project?.productStudio?.id&&project?.productStudio)project.productStudio.id=old.project.productStudio.id;
  const name=$("localProjectName").value.trim()||qfsProjectName(project),record={id:old?.id||qfsProjectId(project.product),name,sourceLabel,createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),project};
  await qfsProjectPut(record);
  try{localStorage.setItem("wypha-studio-last-active-id-v144",record.id);localStorage.setItem("wypha-studio-last-project-meta-v144",JSON.stringify({id:record.id,name:record.name,updatedAt:record.updatedAt}))}catch(e){}
- v6ActiveProjectId=record.id;window.v123Saved?.(record);await renderProjectVault();$("status").textContent="✓ "+name+" tersimpan permanen di perangkat ini.";return record;
+ v6ActiveProjectId=record.id;
+ if($("localProjectName")&&!$("localProjectName").value.trim())$("localProjectName").value=name;
+ window.v123Saved?.(record);
+ await renderProjectVault();
+ await window.refreshLocalProjectList?.();
+ if($("localProjectList"))$("localProjectList").value=record.id;
+ if($("projectVaultDrawer"))$("projectVaultDrawer").open=true;
+ qfsVaultStatus("✓ Proyek \""+name+"\" berhasil disimpan ke Proyek Saya.","good");
+ return record;
 }
 
 function qfsBalancedLiteral(text,start){const open=text.indexOf("{",start);if(open<0)return"";let depth=0,quote="",esc=false;for(let i=open;i<text.length;i++){const c=text[i];if(quote){if(esc)esc=false;else if(c==="\\")esc=true;else if(c===quote)quote="";continue}if(c==='"'||c==="'"||c==='`'){quote=c;continue}if(c==="{")depth++;else if(c==="}"&&--depth===0)return text.slice(open,i+1)}return""}
@@ -4562,25 +4777,260 @@ function qfsExtractTag(text,tag,id){const re=new RegExp(`<${tag}[^>]*id=["']${id
 function qfsScriptConfig(text,id,marker="const C="){const body=qfsExtractTag(text,"script",id);return body?qfsExtractObject(body,marker):null}
 function qfsStyleVar(style,name){const m=String(style||"").match(new RegExp(`--${name}\\s*:\\s*['\"]?([^;'\"}]+)`,`i`));return m?m[1].trim():""}
 function qfsLightPreset(obj){if(!obj)return"off";const n=Number(obj.opacity||0);if(n<=0)return"off";if(n<=.13)return"very-soft";if(n<=.20)return"soft";if(n<=.30)return"medium";return"strong"}
-function qfsLegacyTheme(edit){const desired=String(edit?.customTheme?.label||edit?.theme||"").trim().toLowerCase(),all=THEME_LIBRARY?.baby||[];let hit=all.find(x=>String(x.label).toLowerCase()===desired)||all.find(x=>String(x.id).toLowerCase()===desired);if(!hit&&/sail|ocean|boat/.test(desired))hit=all.find(x=>x.id==="sailor");if(!hit&&/fish|angler/.test(desired))hit=all.find(x=>x.id==="fishing");return hit?.id||"fantasy"}
+function qfsLegacyTheme(edit,prod="baby"){const desired=String(edit?.customTheme?.label||edit?.theme||"").trim().toLowerCase(),all=THEME_LIBRARY?.[prod]||THEME_LIBRARY?.baby||[];let hit=all.find(x=>String(x.label).toLowerCase()===desired)||all.find(x=>String(x.id).toLowerCase()===desired);if(!hit&&/sail|ocean|boat/.test(desired))hit=all.find(x=>x.id==="sailor");if(!hit&&/fish|angler/.test(desired))hit=all.find(x=>x.id==="fishing");return hit?.id||all[0]?.id||"fantasy"}
 function qfsLegacyAiFrame(text,tuner){const c=qfsScriptConfig(text,"qf-ai-frame-art-js");const roles=c?.roles||{};return{enabled:!!Object.keys(roles).length,replace:c?.replace!==false,title:roles.title||"",name:roles.name||"",chip:roles.chip||"",section:roles.section||"",footer:roles.footer||"",cta:roles.cta||"",fit:"contain",opacity:c?.opacity??1,expandX:0,expandY:0,offsetX:c?.offsetX??0,offsetY:c?.offsetY??0,glow:c?.glow!==false,tuner:tuner||normalizeTextFrameTuner({enabled:true})}}
-function qfsLegacyWow(text,edit){const c=qfsScriptConfig(text,"qfs-wow-engine")||{},gate=qfsExtractTag(text,"div","qfsWowGate");const pick=(cls)=>{const m=gate.match(new RegExp(`<[^>]+class=["'][^"']*${cls}[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>`,`i`));return m?m[1].replace(/<[^>]+>/g,"").trim():""};const classMatch=text.match(/id=["']qfsWowGate["'][^>]*class=["']([^"']+)/i),cls=classMatch?.[1]||"";return{enabled:!!gate,style:(cls.match(/qfs-wow-style-([a-z-]+)/)||[])[1]||"crystal",intensity:c.intensity||(/spectacular/.test(cls)?"spectacular":"balanced"),scrollProgress:c.scrollProgress!==false,touchAura:c.touchAura!==false,depth:c.depth!==false,backgroundMode:"auto",backgroundImage:"",backgroundPosition:"center center",backgroundMotion:"drift",backgroundOverlay:34,backgroundBrightness:100,nameText:pick("qfs-wow-name")||edit.customerName||"",eyebrow:pick("qfs-wow-eyebrow")||"A LITTLE WORLD CREATED ESPECIALLY FOR",buttonText:pick("qfs-wow-enter")||"SENTUH UNTUK MEMBUKA",hint:pick("qfs-wow-hint")||"By: Wypha-Printlab"}}
+function qfsLegacyWow(text,edit){const c=qfsScriptConfig(text,"qfs-wow-engine")||{},gate=qfsExtractTag(text,"div","qfsWowGate");const pick=(cls)=>{const m=gate.match(new RegExp(`<[^>]+class=["'][^"']*${cls}[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>`,`i`));return m?m[1].replace(/<[^>]+>/g,"").trim():""};const classMatch=text.match(/id=["']qfsWowGate["'][^>]*class=["']([^"']+)/i),cls=classMatch?.[1]||"";return{enabled:!!gate,style:(cls.match(/qfs-wow-style-([a-z-]+)/)||[])[1]||"crystal",intensity:c.intensity||(/spectacular/.test(cls)?"spectacular":"balanced"),scrollProgress:c.scrollProgress!==false,touchAura:c.touchAura!==false,depth:c.depth!==false,backgroundMode:"auto",backgroundImage:"",backgroundPosition:"center center",backgroundMotion:"drift",backgroundOverlay:34,backgroundBrightness:100,nameText:pick("qfs-wow-name")||edit?.customerName||edit?.fanName||edit?.nameA||"",eyebrow:pick("qfs-wow-eyebrow")||"A LITTLE WORLD CREATED ESPECIALLY FOR",buttonText:pick("qfs-wow-enter")||"SENTUH UNTUK MEMBUKA",hint:pick("qfs-wow-hint")||"By: Wypha-Printlab"}}
 function qfsLegacyFonts(text){const style=qfsExtractTag(text,"style","qfs-font-overrides");const clean=v=>String(v||"").split(",")[0].replace(/["']/g,"").trim();return{title:clean(qfsStyleVar(style,"font-display"))||"Baloo 2",name:clean(qfsStyleVar(style,"font-name"))||clean(qfsStyleVar(style,"font-heading"))||"Fredoka",wowName:clean(qfsStyleVar(style,"font-wow-name"))||clean(qfsStyleVar(style,"font-name"))||"Fredoka",body:clean(qfsStyleVar(style,"font-body"))||"Nunito",customFamily:"",customURL:""}}
 function qfsLegacyCustomCSS(text){return["qfs-name-style","qfs-frame-library"].map(id=>qfsExtractTag(text,"style",id)).filter(Boolean).join("\n\n/* migrated legacy appearance */\n")}
-function qfsLegacyProjectFromHTML(text,fileName="legacy.html"){
- const packed=v126ImportPackedHTML(text);if(packed)return packed;
- const embedded=qfsExtractTag(text,"script","wypha-project-data");if(embedded){const project=JSON.parse(embedded);if(DEFAULTS[project.product])return project;throw new Error("Produk tidak dikenal.")}
- if(!/customerName\s*:/.test(text))throw new Error("HTML lama Couple/Fans tidak dapat dipulihkan lengkap. Gunakan backup JSON asli atau HTML V6.");
- const edit=qfsExtractObject(text,"const EDIT =");if(!edit)throw new Error("File ini tidak memiliki konfigurasi WYPHA legacy (const EDIT tidak ditemukan).");
- const tunerCfg=qfsScriptConfig(text,"qfs-universal-tuner-js")?.tuner||null,tuner=normalizeTextFrameTuner(tunerCfg||{enabled:true}),hero=qfsScriptConfig(text,"qfs-hero-background-engine")||{},lights=qfsScriptConfig(text,"qfs-stage-light-engine")||{};
- const theme=qfsLegacyTheme(edit),pack=(THEME_LIBRARY.baby||[]).find(x=>x.id===theme)||{};const c=edit.customTheme||{};
- const d={...DEFAULTS.baby,customerName:edit.customerName||DEFAULTS.baby.customerName,youtubeUrl:edit.youtubeUrl||"",pageTitle:edit.pageTitle||`Baby Story — ${edit.customerName||"Customer"}`,brandName:"WYPHA PRINTLAB",brandLabel:edit.brandLabel||DEFAULTS.baby.brandLabel,welcomeText:edit.welcomeText||DEFAULTS.baby.welcomeText,headline:edit.headline||DEFAULTS.baby.headline,badges:edit.badges||pack.chips?.join(",")||DEFAULTS.baby.badges,subtitleHtml:edit.subtitleHtml||DEFAULTS.baby.subtitleHtml,storyReady:edit.storyReady||DEFAULTS.baby.storyReady,scrollHint:edit.scrollHint||DEFAULTS.baby.scrollHint,videoEyebrow:edit.videoEyebrow||DEFAULTS.baby.videoEyebrow,watchTitle:edit.watchTitle||DEFAULTS.baby.watchTitle,watchHeadline:edit.watchHeadline||DEFAULTS.baby.watchHeadline,videoNote:edit.videoNote||DEFAULTS.baby.videoNote,privacyLabel:edit.privacyLabel||DEFAULTS.baby.privacyLabel,privacyDescription:edit.privacyDescription||DEFAULTS.baby.privacyDescription,privacyNotice:edit.privacyNotice||DEFAULTS.baby.privacyNotice,privacySmall:edit.privacySmall||DEFAULTS.baby.privacySmall,footerTop:edit.footerTop||DEFAULTS.baby.footerTop,footerMain:edit.footerMain||DEFAULTS.baby.footerMain,createdFor:edit.createdFor||DEFAULTS.baby.createdFor,tagline:edit.tagline||DEFAULTS.baby.tagline};
- const bg=edit.backgroundImage||"",heroImage=hero.image||bg,customPalette=!!edit.customTheme;
- return{product:"baby",fileName:String(fileName||"QR-BABY-CUSTOMER.html").replace(/\.(html?|HTML?)$/,"-MIGRATED.html"),theme,effects:edit.effects||"high",autoThemeDNA:false,autoThemeCopy:false,moodPack:"warm",layoutPreset:"cinematic",decorationPack:pack.decor||"ocean",decorationDensity:"medium",displayMode:"fullbleed",frameAuto:false,frameBundle:pack.bundle||"ocean-pearl",frames:{title:"template",name:"template",chip:"template",section:"template"},aiFrame:qfsLegacyAiFrame(text,tuner),placements:[],smartDecor:{enabled:false,autoTheme:true,character:"elegant",motion:"float",scale:"medium",finish:"soft-glow",zones:{subtitle:true,chips:true,sections:true,footer:true,hero:true,ambient:true},customEnabled:false,customMode:"append",customIcons:"",customAssets:"",customFooter:"",assetSize:30,seed:0},wow:qfsLegacyWow(text,edit),layoutSignaturePosition:"center",signatureStageLight:qfsLightPreset(lights.signature),micrositeStageLight:qfsLightPreset(lights.microsite),backgroundMode:edit.backgroundMode||"cinematic",backgroundClarity:edit.backgroundClarity||"balanced",cinematicMotion:edit.cinematicMotion||"strong",backgroundImage:bg,backgroundVideo:edit.backgroundVideo||"",backgroundVideoPoster:edit.backgroundVideoPoster||"",backgroundPosition:edit.backgroundPosition||"center center",backgroundVideoSpeed:edit.backgroundVideoSpeed??.85,heroBackground:{mode:hero.mode||"main",clarity:"vivid",motion:hero.motion||"cinematic",position:hero.position||edit.backgroundPosition||"center center",image:heroImage,video:hero.video||"",poster:hero.poster||"",opacity:Math.round(Number(hero.opacity??1)*100),overlay:Math.round(Number(hero.overlay??.24)*100),brightness:Math.round(Number(hero.brightness??1)*100)},useThemeText:false,customPalette,colors:{primary:c.primary||pack.palette?.primary||"#68e8ff",secondary:c.secondary||pack.palette?.secondary||"#9f83ff",accent:c.accent||pack.palette?.accent||"#ff9fcf",gold:c.gold||pack.palette?.gold||"#ffe28a",bg0:c.bg0||pack.palette?.bg0||"#050313",bg1:c.bg1||pack.palette?.bg1||"#0b0726",bg2:c.bg2||pack.palette?.bg2||"#15103c",bg3:c.bg3||pack.palette?.bg3||"#241456",symbols:Array.isArray(c.symbols)?c.symbols.join(","):pack.symbols||"✦,✨,⭐"},textColors:newTextColorState(),aiCopy:{language:"Bahasa Indonesia",tone:"Premium emosional",extra:"Imported from legacy HTML",paste:""},fonts:qfsLegacyFonts(text),nameStyle:"glitter",share:{enabled:true,sectionTitle:"SHARE THIS MAGICAL MOMENT",message:"Lihat halaman QR Fantasy spesial ini ✨",publicUrl:"",whatsapp:true,facebook:true,instagram:true,x:false,copy:true,native:true,style:"glass",position:"before-footer"},dynamic:d,customCSS:qfsLegacyCustomCSS(text),customHTML:"",customJS:"",customBlocks:[],__migration:{source:"legacy-html",sourceFile:fileName,importedAt:new Date().toISOString(),legacyTheme:edit.theme||"",legacyCustomTheme:edit.customTheme||null}};
+function qfsRepairEmbeddedProjectJSON(raw){
+ if(!raw||typeof raw!=="string")return null;
+ try{return JSON.parse(raw)}catch(e){}
+ const spliceIdx=raw.indexOf(',"data:image/');
+ if(spliceIdx>0){
+  const prefix=raw.slice(0,spliceIdx);
+  for(const suffix of ["}}","}}}","}"]){
+   try{return JSON.parse(prefix+suffix)}catch(e2){}
+  }
+ }
+ return null;
 }
-async function importLegacyProjectFile(file){const text=await file.text();const project=qfsLegacyProjectFromHTML(text,file.name);loadProject(project);doGenerate();const record={id:qfsProjectId("legacy"),name:qfsProjectName(project),sourceLabel:"Imported Legacy HTML",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),project};await qfsProjectPut(record);v6ActiveProjectId=record.id;$("localProjectName").value=record.name;await renderProjectVault();$("status").className="status good";$("status").innerHTML=`✓ Migrasi berhasil. <b>${escapeHTML(record.name)}</b> sudah masuk ke Proyek Saya dan dapat diedit.`;document.querySelector('.tab[data-tab="preview"]')?.click();return record}
-async function importDeviceProjectJSON(file){const obj=JSON.parse(await file.text());const projects=Array.isArray(obj?.projects)?obj.projects:[obj];let n=0,lastRecord=null;for(const item of projects){const project=item?.project||item;if(!project?.product||!DEFAULTS[project.product])continue;const record={id:item?.id||qfsProjectId(project.product),name:item?.name||qfsProjectName(project),sourceLabel:item?.sourceLabel||"Imported Project JSON",createdAt:item?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),project};await qfsProjectPut(record);lastRecord=record;n++}await renderProjectVault();if(lastRecord){loadProject(lastRecord.project);v6ActiveProjectId=lastRecord.id;$("localProjectName").value=lastRecord.name;doGenerate()}return n}
-async function backupDeviceProjects(){const projects=await qfsProjectAll();if(!projects.length)return alert("Belum ada proyek di Proyek Saya.");downloadText(`WYPHA-MAGIC-QR-BACKUP-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify({app:"WYPHA Magic QR",version:1,exportedAt:new Date().toISOString(),projects},null,2),"application/json")}
+function qfsLegacyProjectFromHTML(text,fileName="legacy.html"){
+ try{
+  const packed=v126ImportPackedHTML(text);
+  if(packed){
+   const norm=qfsNormalizeProjectObject(packed);
+   if(norm)return norm;
+  }
+ }catch(e){}
+ let recoveredStudio126=null;
+ const embedded=qfsExtractTag(text,"script","wypha-project-data");
+ if(embedded){
+  const parsed=qfsRepairEmbeddedProjectJSON(embedded);
+  if(parsed){
+   if(parsed.product&&DEFAULTS[parsed.product]){
+    return qfsNormalizeProjectObject(parsed);
+   }
+   if(parsed.studio126)recoveredStudio126=parsed.studio126;
+  }
+ }
+ const edit=qfsExtractObject(text,"const EDIT =")||qfsExtractObject(text,"const EDIT=")||{};
+ let idRuntime=null;
+ try{
+  const idScript=qfsExtractTag(text,"script","wypha-product-identity");
+  if(idScript){
+   const pIdx=idScript.lastIndexOf("})({");
+   if(pIdx>=0)idRuntime=qfsSafeObjectLiteral(qfsBalancedLiteral(idScript,pIdx+2));
+  }
+ }catch(e){}
+ const hasEditKeys=Object.keys(edit).length>0;
+ if(!hasEditKeys&&!recoveredStudio126&&!idRuntime){
+  throw new Error("File HTML ini tidak memiliki konfigurasi proyek WYPHA yang dikenali.");
+ }
+ let prod="baby";
+ if(edit.fanName||edit.idolName||idRuntime?.type==="fans")prod="fan";
+ else if(edit.nameA||edit.nameB||idRuntime?.type==="wedding"||idRuntime?.type==="anniversary")prod="couple";
+ let expType=idRuntime?.type||(prod==="fan"?"fans":prod==="couple"?"anniversary":"baby");
+ if(/PERSONAL DIARY/i.test(String(edit.brandLabel||edit.pageTitle||""))||/wypha-v154-diary-runtime/i.test(text)){
+  expType="diary";
+  prod="baby";
+ }
+ const tunerCfg=qfsScriptConfig(text,"qfs-universal-tuner-js")?.tuner||null,tuner=normalizeTextFrameTuner(tunerCfg||{enabled:true}),hero=qfsScriptConfig(text,"qfs-hero-background-engine")||{},lights=qfsScriptConfig(text,"qfs-stage-light-engine")||{};
+ const theme=qfsLegacyTheme(edit,prod),pack=(THEME_LIBRARY[prod]||THEME_LIBRARY.baby||[]).find(x=>x.id===theme)||{};
+ const c=edit.customTheme||{};
+ const baseDef=DEFAULTS[prod]||DEFAULTS.baby;
+ const d={...baseDef};
+ for(const k of Object.keys(baseDef)){if(edit[k]!==undefined)d[k]=edit[k];}
+ if(prod==="baby"){
+  d.customerName=edit.customerName||idRuntime?.name||baseDef.customerName;
+  d.pageTitle=edit.pageTitle||`${V124_PROFILES?.[expType]?.label||"Baby Story"} — ${d.customerName||"Customer"}`;
+ }else if(prod==="couple"){
+  d.nameA=edit.nameA||idRuntime?.name||baseDef.nameA;
+  d.nameB=edit.nameB||idRuntime?.secondName||baseDef.nameB;
+  d.pageTitle=edit.pageTitle||`${d.nameA} & ${d.nameB}`;
+ }else if(prod==="fan"){
+  d.fanName=edit.fanName||idRuntime?.name||baseDef.fanName;
+  d.idolName=edit.idolName||idRuntime?.secondName||baseDef.idolName;
+  d.pageTitle=edit.pageTitle||`${d.fanName} & ${d.idolName}`;
+ }
+ d.brandName="WYPHA PRINTLAB";
+ const bg=edit.backgroundImage||"",heroImage=hero.image||bg,customPalette=!!edit.customTheme;
+ const result={
+  product:prod,
+  fileName:String(fileName||"QR-CUSTOMER.html").replace(/\.(html?|HTML?)$/,"-MIGRATED.html"),
+  theme:expType&&V124_PROFILES?.[expType]?.theme?V124_PROFILES[expType].theme:theme,
+  effects:edit.effects||"high",
+  autoThemeDNA:false,
+  autoThemeCopy:false,
+  moodPack:"warm",
+  layoutPreset:"cinematic",
+  decorationPack:pack.decor||"ocean",
+  decorationDensity:"medium",
+  displayMode:"fullbleed",
+  frameAuto:false,
+  frameBundle:pack.bundle||"ocean-pearl",
+  frames:{title:"template",name:"template",chip:"template",section:"template"},
+  aiFrame:qfsLegacyAiFrame(text,tuner),
+  placements:[],
+  smartDecor:{enabled:false,autoTheme:true,character:"elegant",motion:"float",scale:"medium",finish:"soft-glow",zones:{subtitle:true,chips:true,sections:true,footer:true,hero:true,ambient:true},customEnabled:false,customMode:"append",customIcons:"",customAssets:"",customFooter:"",assetSize:30,seed:0},
+  wow:qfsLegacyWow(text,edit),
+  layoutSignaturePosition:"center",
+  signatureStageLight:qfsLightPreset(lights.signature),
+  micrositeStageLight:qfsLightPreset(lights.microsite),
+  backgroundMode:edit.backgroundMode||"cinematic",
+  backgroundClarity:edit.backgroundClarity||"balanced",
+  cinematicMotion:edit.cinematicMotion||"strong",
+  backgroundImage:bg,
+  backgroundVideo:edit.backgroundVideo||"",
+  backgroundVideoPoster:edit.backgroundVideoPoster||"",
+  backgroundPosition:edit.backgroundPosition||"center center",
+  backgroundVideoSpeed:edit.backgroundVideoSpeed??.85,
+  heroBackground:{mode:hero.mode||"main",clarity:"vivid",motion:hero.motion||"cinematic",position:hero.position||edit.backgroundPosition||"center center",image:heroImage,video:hero.video||"",poster:hero.poster||"",opacity:Math.round(Number(hero.opacity??1)*100),overlay:Math.round(Number(hero.overlay??.24)*100),brightness:Math.round(Number(hero.brightness??1)*100)},
+  useThemeText:false,
+  customPalette,
+  colors:{primary:c.primary||pack.palette?.primary||"#68e8ff",secondary:c.secondary||pack.palette?.secondary||"#9f83ff",accent:c.accent||pack.palette?.accent||"#ff9fcf",gold:c.gold||pack.palette?.gold||"#ffe28a",bg0:c.bg0||pack.palette?.bg0||"#050313",bg1:c.bg1||pack.palette?.bg1||"#0b0726",bg2:c.bg2||pack.palette?.bg2||"#15103c",bg3:c.bg3||pack.palette?.bg3||"#241456",symbols:Array.isArray(c.symbols)?c.symbols.join(","):pack.symbols||"✦,✨,⭐"},
+  textColors:newTextColorState(),
+  aiCopy:{language:"Bahasa Indonesia",tone:"Premium emosional",extra:"Imported from legacy HTML",paste:""},
+  fonts:qfsLegacyFonts(text),
+  nameStyle:"glitter",
+  share:{enabled:true,sectionTitle:"SHARE THIS MAGICAL MOMENT",message:"Lihat halaman QR Fantasy spesial ini ✨",publicUrl:"",whatsapp:true,facebook:true,instagram:true,x:false,copy:true,native:true,style:"glass",position:"before-footer"},
+  dynamic:d,
+  experience:{
+   type:expType,
+   name:idRuntime?.name||d.customerName||d.fanName||d.nameA||"",
+   secondName:idRuntime?.secondName||d.idolName||d.nameB||"",
+   date:idRuntime?.date||d.specialDate||"",
+   message:idRuntime?.message||d.privacyDescription||d.permanentMessage||""
+  },
+  productStudio:idRuntime?{
+   version:1,
+   type:expType,
+   id:idRuntime.id||qfsProjectId("studio"),
+   enabled:idRuntime.enabled!==false,
+   details:idRuntime.details||{},
+   items:Array.isArray(idRuntime.items)?idRuntime.items:(V124_PROFILES?.[expType]?.items||[]).map(x=>Array.isArray(x)?{title:x[0],body:x[1]}:x),
+   signatureTitle:idRuntime.signatureTitle||V124_PROFILES?.[expType]?.feature||"",
+   signatureIntro:idRuntime.signatureIntro||V124_PROFILES?.[expType]?.featureIntro||"",
+   galleryTitle:idRuntime.galleryTitle||V124_PROFILES?.[expType]?.gallery||"",
+   videoTitle:idRuntime.videoTitle||V124_PROFILES?.[expType]?.video||"",
+   message:idRuntime.message||""
+  }:undefined,
+  studio126:recoveredStudio126||undefined,
+  customCSS:qfsLegacyCustomCSS(text),
+  customHTML:"",
+  customJS:"",
+  customBlocks:[],
+  __migration:{source:"legacy-html",sourceFile:fileName,importedAt:new Date().toISOString(),legacyTheme:edit.theme||"",legacyCustomTheme:edit.customTheme||null}
+ };
+ return qfsNormalizeProjectObject(result);
+}
+async function importLegacyProjectFile(file){
+ qfsVaultStatus("⏳ Membaca & memulihkan HTML Proyek Lama: "+file.name+"...","info");
+ const text=await file.text();
+ const project=qfsLegacyProjectFromHTML(text,file.name);
+ const record={id:qfsProjectId("legacy"),name:qfsProjectName(project),sourceLabel:"Imported Legacy HTML",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),project};
+ await qfsProjectPut(record);
+ loadProject(project);
+ v6ActiveProjectId=record.id;
+ if($("localProjectName"))$("localProjectName").value=record.name;
+ await renderProjectVault();
+ await window.refreshLocalProjectList?.();
+ if($("localProjectList"))$("localProjectList").value=record.id;
+ if($("projectVaultDrawer"))$("projectVaultDrawer").open=true;
+ document.querySelector('.tab[data-tab="preview"]')?.click();
+ qfsVaultStatus("✓ Migrasi HTML berhasil: \""+record.name+"\" sudah masuk ke Proyek Saya & siap diedit.","good");
+ return record;
+}
+async function importDeviceProjectJSON(file){
+ qfsVaultStatus("⏳ Mengimpor file JSON: "+file.name+"...","info");
+ const rawText=await file.text();
+ let obj;
+ try{obj=JSON.parse(rawText)}catch(err){throw new Error("Format file JSON rusak atau tidak valid: "+err.message)}
+ if(obj&&obj.schema==="wypha-customer-gallery/v1"&&Array.isArray(obj.photos)){
+  let added=0;
+  for(const p of obj.photos){
+   if(p&&typeof p.src==="string"&&p.src.startsWith("data:image/")){
+    suiteUploadedPhotos.push({id:p.id||("photo-"+Date.now()+"-"+added),name:p.name||("Foto "+(added+1)),src:p.src});
+    added++;
+   }
+  }
+  renderSuitePhotos();
+  if(typeof v126GenerateNow==="function")v126GenerateNow(false);
+  qfsVaultStatus("✓ "+added+" foto dari backup galeri customer berhasil dimasukkan ke proyek aktif.","good");
+  return added;
+ }
+ if(obj&&!obj.product&&!obj.projects&&!obj.project&&!obj.dynamic&&(obj.colors||obj.fonts||obj.frames)&&typeof applyThemeDNAObject==="function"){
+  applyThemeDNAObject(obj);
+  qfsVaultStatus("✓ File Theme DNA berhasil diterapkan ke proyek aktif.","good");
+  return 1;
+ }
+ const rawList=Array.isArray(obj?.projects)?obj.projects:Array.isArray(obj)?obj:[obj];
+ let n=0,lastRecord=null;
+ for(const item of rawList){
+  const normProj=qfsNormalizeProjectObject(item?.project||item);
+  if(!normProj)continue;
+  const record={
+   id:item?.id||qfsProjectId(normProj.product),
+   name:item?.name||qfsProjectName(normProj),
+   sourceLabel:item?.sourceLabel||"Imported Project JSON",
+   createdAt:item?.createdAt||new Date().toISOString(),
+   updatedAt:new Date().toISOString(),
+   project:normProj
+  };
+  await qfsProjectPut(record);
+  lastRecord=record;
+  n++;
+ }
+ if(!n||!lastRecord){
+  throw new Error("File JSON tidak berisi data proyek WYPHA yang dikenali.");
+ }
+ loadProject(lastRecord.project);
+ v6ActiveProjectId=lastRecord.id;
+ if($("localProjectName"))$("localProjectName").value=lastRecord.name;
+ try{
+  localStorage.setItem("wypha-studio-last-active-id-v144",lastRecord.id);
+  localStorage.setItem("wypha-studio-last-project-meta-v144",JSON.stringify({id:lastRecord.id,name:lastRecord.name,updatedAt:lastRecord.updatedAt}));
+ }catch(e){}
+ await renderProjectVault();
+ await window.refreshLocalProjectList?.();
+ if($("localProjectList"))$("localProjectList").value=lastRecord.id;
+ if($("projectVaultDrawer"))$("projectVaultDrawer").open=true;
+ document.querySelector('.tab[data-tab="preview"]')?.click();
+ qfsVaultStatus("✓ "+n+" project JSON berhasil diimpor & dibuka: \""+lastRecord.name+"\".","good");
+ return n;
+}
+async function backupDeviceProjects(){
+ qfsVaultStatus("⏳ Menyiapkan file Backup Semua Proyek...","info");
+ let allRecords=await qfsProjectAll();
+ let explicitRecords=allRecords.filter(r=>r&&!projectVaultIsDraft(r));
+ if(!explicitRecords.length){
+  const savedActive=await saveCurrentProjectToDevice("Backup Otomatis Proyek Aktif",false);
+  explicitRecords=[savedActive];
+ }else if(v6ActiveProjectId){
+  try{
+   const curSnap=stripDuplicateOriginalSrcInProject(captureForm());
+   const idx=explicitRecords.findIndex(r=>r&&r.id===v6ActiveProjectId);
+   if(idx>=0){
+    explicitRecords[idx]={...explicitRecords[idx],name:$("localProjectName")?.value.trim()||explicitRecords[idx].name,updatedAt:new Date().toISOString(),project:curSnap};
+    await qfsProjectPut(explicitRecords[idx]);
+   }
+  }catch(e){}
+ }
+ const exportItems=explicitRecords.length?explicitRecords:allRecords;
+ const nowIso=new Date().toISOString();
+ const blobParts=['{\n  "app": "WYPHA Magic QR",\n  "version": 21,\n  "exportedAt": ',JSON.stringify(nowIso),',\n  "projects": [\n'];
+ for(let i=0;i<exportItems.length;i++){
+  if(i>0)blobParts.push(',\n');
+  const rec=exportItems[i];
+  const cleanRec={...rec,project:stripDuplicateOriginalSrcInProject(rec.project)};
+  blobParts.push(JSON.stringify(cleanRec));
+ }
+ blobParts.push('\n  ]\n}');
+ const fileName=`WYPHA-MAGIC-QR-BACKUP-${nowIso.slice(0,10)}.json`;
+ const blob=new Blob(blobParts,{type:"application/json;charset=utf-8"});
+ downloadText(fileName,blob,"application/json");
+ qfsVaultStatus(`✓ Backup ${exportItems.length} proyek berhasil diunduh (${fileName}).`,"good");
+ return exportItems.length;
+}
 
 let qfsInitialProject=null;
 let qfsResetEpoch=0;
@@ -4590,30 +5040,44 @@ async function resetForNewProject(){
  window.v122BeforeReset?.();try{qfsResetEpoch++;window.resetV12Temporary?.();await window.resetBusinessSuiteTemporaryState();
  const id=v124Active,theme=$("theme").value,engine=$("aiEngine").value,clean=v124Factory(id);clean.aiEngine=engine;
  stateCache={};v124Drafts.delete(id);loadProject(clean);
- if(theme!==V124_PROFILES[id].theme&&THEME_LIBRARY[clean.product].some(pack=>pack.id===theme)){renderThemeCategories(clean.product,theme);renderThemeOptions(clean.product,theme);$("theme").value=theme;applyThemeDNA(true)}
+ if(theme!==V124_PROFILES[id].theme&&THEME_LIBRARY[clean.product].some(pack=>pack.id===theme)){renderThemeCategories(clean.product,theme);renderThemeOptions(clean.product,theme);$("theme").value=theme;applyThemePreset(clean.product,theme,{preserveText:true})}
  for(const key of ['customerName','nameA','nameB','fanName','idolName','specialDate','fanSinceDate','fanSinceDisplay','youtubeUrl','siteUrl']){if($('f_'+key))$('f_'+key).value=''}
- for(const id of ["experienceName","experienceSecondName","experienceDate","experienceMessage","experienceVideoUrl","experiencePhotoUrls","experienceMusicUrl","copyAiPrompt","copyAiPaste","quickSheetPromptOutput","assetPromptOutput","typoPrompt","localProjectName"]){if($(id))$(id).value=""}
+ for(const id of ["experienceName","experienceSecondName","experienceDate","experienceMessage","experienceVideoUrl","experiencePhotoUrls","experienceMusicUrl","copyAiPrompt","copyAiPaste","copyAiExtra","localProjectName","localProjectList","qrTargetUrl","publicShareUrl","customCSS","customHTML","customJS","v6CustomCaption","v6PanelImage","wowBackgroundImage","wowNameText","v8VideoFile","v8MusicFile","v8DoorImage"])if($(id))$(id).value="";
  assetSourceImage=null;assetCuts=[];assetDrawState.drawing=false;assetDrawState.current=null;selectedPlacementId=null;resetPlacementComposer();
  if($("quickSheetResultGrid"))$("quickSheetResultGrid").replaceChildren();if($("quickSheetGuide"))$("quickSheetGuide").replaceChildren();
  for(const id of ["assetSheetCanvas","assetOverlayCanvas"]){const c=$(id);if(c){c.getContext("2d").clearRect(0,0,c.width,c.height);c.width=c.height=0}}
  for(const el of document.querySelectorAll('input[type="file"]'))el.value="";
  renderAssetCuts();renderPlacementList();renderPlacementLab();
- $("assetCutStatus").textContent="Upload sheet AI baru untuk mulai memotong aset.";$("copyAiStatus").textContent="Belum ada jawaban AI untuk proyek ini.";$("typoStatus").textContent="";
+ $("assetCutStatus").textContent="Upload sheet AI baru untuk mulai memotong aset.";$("copyAiStatus").textContent="Belum ada jawaban AI untuk proyek ini.";$("typoStatus").textContent="Pilih preset atau klik Generate Typography PNG.";
  v6ActiveProjectId=null;await qfsProjectDelete("v6-autosave").catch(()=>{});await renderProjectVault();await window.refreshLocalProjectList();
- doGenerate();$("makePromptBtn").click();$("status").className="status good";$("status").textContent="✓ Proyek baru bersih. Identitas, ikon dasar, dan wording "+V124_PROFILES[id].label+" siap digunakan.";
+ if(typeof v126GenerateNow==="function")v126GenerateNow(false);else doGenerate();
+ $("makePromptBtn").click();
+ qfsVaultStatus("✓ Proyek baru bersih. Proyek tersimpan di Proyek Saya tetap aman.","good");
  $("resetProjectNotice").textContent="✓ Proyek baru bersih. Data proyek lama tetap tersimpan.";
  }finally{window.v122AfterReset?.()}
 }
 
 function saveProject(){
- const s=captureForm();downloadText((safeFileName().replace(/\.html$/i,"")||"project")+".qfs.json",JSON.stringify(s,null,2),"application/json");
+ const s=stripDuplicateOriginalSrcInProject(captureForm());
+ const fn=(safeFileName().replace(/\.html$/i,"")||"project")+".qfs.json";
+ downloadText(fn,new Blob([JSON.stringify(s,null,2)],{type:"application/json"}),"application/json");
+ qfsVaultStatus("✓ Backup JSON proyek aktif berhasil diunduh: "+fn,"good");
 }
 function loadProject(obj){
  qfsResetEpoch++;window.resetBusinessSuiteTemporaryState?.().catch(()=>{});
  v6ActiveProjectId=null;
- if(!obj||!obj.product||!DEFAULTS[obj.product])throw new Error("Project JSON tidak valid.");
+ const norm=qfsNormalizeProjectObject(obj);
+ if(!norm||!norm.product||!DEFAULTS[norm.product])throw new Error("Project JSON tidak valid.");
+ obj=norm;
+ const expType=typeof v124Type==="function"?v124Type(obj):(obj.experience?.type||obj.product||"baby");
+ if(typeof V124_PROFILES==="object"&&Object.hasOwn(V124_PROFILES,expType)){
+  v124Active=expType;
+  if($("experienceType"))$("experienceType").value=expType;
+ }
  stateCache[obj.product]=obj;$("product").value=obj.product;$("product").dataset.prev=obj.product;
- renderThemeCategories(obj.product,obj.theme);renderThemeOptions(obj.product,obj.theme);renderCustomer(obj.product,obj.dynamic);restoreCommon(obj);doGenerate();window.v122ProjectLoaded?.();
+ renderThemeCategories(obj.product,obj.theme);renderThemeOptions(obj.product,obj.theme);renderCustomer(obj.product,obj.dynamic);restoreCommon(obj);
+ if(!v126Booting&&typeof v126GenerateNow==="function")v126GenerateNow(false);else doGenerate();
+ window.v122ProjectLoaded?.();
 }
 
 function makeBackgroundPrompt(){
@@ -4752,17 +5216,20 @@ function init(){
  $("downloadBtn").onclick=$("downloadCodeBtn").onclick=()=>downloadText(safeFileName(),currentCode());
  $("copyCodeBtn").onclick=async()=>{await navigator.clipboard.writeText(currentCode());$("status").className="status good";$("status").textContent="Kode HTML berhasil disalin."};
  $("saveProjectBtn").onclick=saveProject;
- $("saveDeviceProjectBtn").onclick=()=>saveCurrentProjectToDevice().catch(err=>alert(err.message));
- $("resetNewProjectBtn").onclick=()=>resetForNewProject().catch(err=>alert("Reset gagal: "+err.message));
+ $("saveDeviceProjectBtn").onclick=()=>saveCurrentProjectToDevice().catch(err=>qfsVaultStatus("⚠ Gagal menyimpan proyek: "+(err.message||err),"warn"));
+ $("resetNewProjectBtn").onclick=()=>resetForNewProject().catch(err=>qfsVaultStatus("⚠ Reset gagal: "+(err.message||err),"warn"));
  $("projectVaultSearch").addEventListener("input",()=>{projectVaultVisible=8;renderProjectVault()});
  $("projectVaultFilter").addEventListener("change",()=>{projectVaultVisible=8;renderProjectVault()});
  $("projectVaultMore").onclick=()=>{projectVaultVisible+=8;renderProjectVault()};
  $("aiEngine").addEventListener("change",()=>{$("makeAiCopyPromptBtn").click();$("makePromptBtn").click();$("assetPromptGenerateBtn").click();$("quickSheetPromptBtn")?.click()});
- $("legacyProjectInput").addEventListener("change",async e=>{try{const f=e.target.files[0];if(!f)return;await importLegacyProjectFile(f)}catch(err){console.error(err);alert("Import proyek lama gagal: "+err.message)}e.target.value=""});
- $("deviceProjectJsonInput").addEventListener("change",async e=>{try{const f=e.target.files[0];if(!f)return;const n=await importDeviceProjectJSON(f);$("status").className="status good";$("status").textContent=`✓ ${n} project JSON berhasil dimasukkan ke Proyek Saya.`}catch(err){alert("Import JSON gagal: "+err.message)}e.target.value=""});
- $("backupDeviceProjectsBtn").onclick=()=>backupDeviceProjects().catch(err=>alert(err.message));
+ if($("legacyProjectBtn"))$("legacyProjectBtn").onclick=()=>{const inp=$("legacyProjectInput");if(inp){inp.value="";inp.click();}};
+ if($("deviceProjectJsonBtn"))$("deviceProjectJsonBtn").onclick=()=>{const inp=$("deviceProjectJsonInput");if(inp){inp.value="";inp.click();}};
+ if($("loadProjectBtn"))$("loadProjectBtn").onclick=()=>{const inp=$("loadProjectInput");if(inp){inp.value="";inp.click();}};
+ $("legacyProjectInput").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{await importLegacyProjectFile(f)}catch(err){console.error(err);qfsVaultStatus("⚠ Import HTML gagal: "+(err.message||err),"warn")}finally{e.target.value=""}});
+ $("deviceProjectJsonInput").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{await importDeviceProjectJSON(f)}catch(err){console.error(err);qfsVaultStatus("⚠ Import JSON gagal: "+(err.message||err),"warn")}finally{e.target.value=""}});
+ $("backupDeviceProjectsBtn").onclick=()=>backupDeviceProjects().catch(err=>qfsVaultStatus("⚠ Backup gagal: "+(err.message||err),"warn"));
  renderProjectVault();
- $("loadProjectInput").addEventListener("change",async e=>{try{const f=e.target.files[0];if(!f)return;loadProject(JSON.parse(await f.text()))}catch(err){alert(err.message)}e.target.value=""});
+ $("loadProjectInput").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{await importDeviceProjectJSON(f)}catch(err){console.error(err);qfsVaultStatus("⚠ Load Project gagal: "+(err.message||err),"warn")}finally{e.target.value=""}});
  $("makePromptBtn").onclick=()=>{$("promptOutput").value=aiEnginePrompt(makeBackgroundPrompt())};
  $("copyPromptBtn").onclick=async()=>{if(!$("promptOutput").value)$("promptOutput").value=aiEnginePrompt(makeBackgroundPrompt());await navigator.clipboard.writeText($("promptOutput").value)};
  if($("wowPortalSheetBtn"))$("wowPortalSheetBtn").onclick=()=>{const card=$("quickSheetCard");if(card)card.open=true;$("quickSheetType").value="portal";const pack=getThemePack($("product").value,$("theme").value);$("quickSheetTheme").value=(pack?.label||$("theme").value)+" — unique customer gateway";$("quickSheetType").dispatchEvent(new Event("change"));$("quickSheetTheme").dispatchEvent(new Event("input"));card?.scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("quickSheetPromptBtn")?.click(),180)};
@@ -5688,7 +6155,7 @@ function initV121(){
  document.querySelector('[data-v12-path="booth.enabled"]')?.closest('.v12-card')?.setAttribute('id','v121BoothSettings');
  const card=document.createElement('section');card.id='v121QuickStudio';card.className='v121-launcher';card.setAttribute('aria-label','Pintasan Rare Studio dan video');
  card.innerHTML='<div class="v121-launcher-heading"><strong>✦ Rare Studio & Video</strong><span class="v121-version">V21 • CINEMATIC EDITION</span></div><p>Atur fitur interaktif dan hasil video melalui pintasan di bawah. Semua pengaturan tersedia di PC dan HP.</p><div class="v121-shortcuts"><button id="v121AlbumOpen" type="button">My Rare Collection<span>Album, judul & finishing</span></button><button id="v121BoothOpen" type="button">Our Photo Booth<span>Bingkai & caption foto</span></button><button id="v121VoiceOpen" type="button">Voice Note<span>Rekam atau upload suara</span></button><button id="v121VideoOpen" type="button">Export Video / MP4<span>Render cerita & pemutar QR</span></button></div><div class="v121-launcher-footer"><button id="v121UpdateApp" type="button" class="btn">↻ Perbarui aplikasi</button><span id="v121UpdateStatus" class="v121-update-status" role="status" aria-live="polite">Versi V19</span></div>';
- const anchor=document.querySelector('.offline-install-panel');if(anchor)anchor.after(card);else document.querySelector('.sidebar')?.prepend(card);
+ const anchor=document.querySelector('.project-vault-panel')||document.querySelector('.offline-install-panel');if(anchor)anchor.after(card);else document.querySelector('.sidebar')?.prepend(card);
  $('v121AlbumOpen').onclick=()=>v12OpenStudio('rare','v121AlbumSettings');$('v121BoothOpen').onclick=()=>v12OpenStudio('rare','v121BoothSettings');$('v121VoiceOpen').onclick=()=>v12OpenStudio('voice');$('v121VideoOpen').onclick=()=>v12OpenStudio('video');
  $('v121UpdateApp').onclick=async()=>{
   const button=$('v121UpdateApp'),status=$('v121UpdateStatus');
@@ -5740,7 +6207,7 @@ function v122Init(){
  const head=$('v12Dialog').querySelector('.v12-head'),actions=document.createElement('div');actions.className='v122-head-actions';head.append(actions);actions.append(v122UndoButton('↶'));const help=document.createElement('button');help.type='button';help.textContent='?';help.title='Manual Cinematic Edition';help.setAttribute('aria-label','Buka Manual Cinematic Edition');help.onclick=()=>v12ShowTab('manual');actions.append(help,$('v12Close'));
  const footer=$('v121QuickStudio').querySelector('.v121-launcher-footer');footer.append(v122UndoButton('↶ Undo'),v122UndoButton('↷ Redo',true));const manualLaunch=document.createElement('button');manualLaunch.type='button';manualLaunch.className='btn';manualLaunch.id='v122ManualOpen';manualLaunch.textContent='? Manual Cinematic';manualLaunch.onclick=()=>v12OpenStudio('manual');footer.append(manualLaunch);const status=document.createElement('span');status.id='v122UndoStatus';status.className='v121-update-status';footer.append(status);
  const desktopUndo=v122UndoButton('↶ Undo');desktopUndo.id='undoStudioBtn';$('saveProjectBtn').after(desktopUndo);const mobileUndo=v122UndoButton('↶ Undo');mobileUndo.classList.add('v122-mobile-undo');mobileUndo.id='v122MobileUndo';document.querySelector('.topbar .brand').after(mobileUndo);$('stickerLabDialog').querySelector('.sl-head-actions').prepend(v122UndoButton('↶ Undo'));
- const queue=e=>{if(e.target.closest('#v122CutPicker,[data-v122-undo],[data-v122-redo]'))return;if(e.type==='change'&&e.target.type!=='file'&&!v122Gesture)queueMicrotask(v122RecordHistory);else v122QueueHistory()};document.addEventListener('input',queue);document.addEventListener('change',queue);document.addEventListener('click',queue);document.addEventListener('pointerdown',e=>{if(e.target.matches('canvas,input[type=range]')){v122RecordHistory();v122Gesture=true}},true);for(const type of ['pointerup','pointercancel'])document.addEventListener(type,()=>{if(v122Gesture){v122Gesture=false;v122QueueHistory()}},true);document.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||e.altKey||e.key.toLowerCase()!=='z'||e.target.closest('input,textarea,[contenteditable=true]'))return;e.preventDefault();v122Undo(e.shiftKey?1:-1)});v122SyncUI();
+ const queue=e=>{if(!e.target||e.target.type==='file'||e.target.closest('#v122CutPicker,.project-vault-panel,.topbar,#v123Quickbar,[data-v122-undo],[data-v122-redo]'))return;if(e.type==='change'&&e.target.type!=='file'&&!v122Gesture)queueMicrotask(v122RecordHistory);else v122QueueHistory()};document.addEventListener('input',queue);document.addEventListener('change',queue);document.addEventListener('click',queue);document.addEventListener('pointerdown',e=>{if(e.target.matches('canvas,input[type=range]')){v122RecordHistory();v122Gesture=true}},true);for(const type of ['pointerup','pointercancel'])document.addEventListener(type,()=>{if(v122Gesture){v122Gesture=false;v122QueueHistory()}},true);document.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||e.altKey||e.key.toLowerCase()!=='z'||e.target.closest('input,textarea,[contenteditable=true]'))return;e.preventDefault();v122Undo(e.shiftKey?1:-1)});v122SyncUI();
 }
 
 /* Client-only gallery data remains on the visitor's own browser. */
@@ -6307,7 +6774,7 @@ function v126Defaults(){return{version:10,holo13:v13Settings(),fanCard:v1210Sett
 function v126Normalize(value){const d=v126Defaults(),v=value&&typeof value==='object'?value:{};d.editor.preview=['auto','manual','live'].includes(v.editor?.preview)?v.editor.preview:'auto';d.delivery.deduplicate=v.delivery?.deduplicate!==false;d.delivery.webSize=[1080,1440,1920].includes(Number(v.delivery?.webSize))?Number(v.delivery.webSize):1440;for(const key of Object.keys(V126_MEDIA_LABELS)){const m=v.media?.[key]||{};d.media[key]={mode:['gallery','upload','url'].includes(m.mode)?m.mode:'gallery',photo:typeof m.photo==='string'?m.photo:'first',src:typeof m.src==='string'?m.src:'',name:typeof m.name==='string'?m.name.slice(0,200):''}}const n=v.names||{};d.names.mode=['off','title','custom'].includes(n.mode)?n.mode:'off';d.names.fontSync=n.fontSync!==false;d.names.animated=n.animated===true;for(const key of ['first','second'])if(/^#[a-f0-9]{6}$/i.test(n[key]||''))d.names[key]=n[key];d.names.angle=Math.max(0,Math.min(360,Number.isFinite(Number(n.angle))?Number(n.angle):100));for(const key of Object.keys(d.names.targets))if(n.targets?.[key]!=null)d.names.targets[key]=!!n.targets[key];const c=v.content||{};d.content.enabled=c.enabled!==false;d.content.primary=c.primary==='en'?'en':'id';d.content.exportLanguage=['primary','id','en'].includes(c.exportLanguage)?c.exportLanguage:'primary';for(const [key,text]of Object.entries(c.alternate||{}))if(/^(?:dynamic|experience|product|rare|share|order|block)\.[a-zA-Z0-9_.-]+$/.test(key)&&typeof text==='string')d.content.alternate[key]=text.slice(0,24000);const g=v.customer||{};for(const key of ['entry','compact','autoHide','personal','favourites','trail','resume','secret','reply'])if(g[key]!=null)d.customer[key]=!!g[key];d.customer.secretAfter=Math.max(1,Math.min(20,Number(g.secretAfter)||3));for(const lang of ['id','en'])if(typeof g.secretText?.[lang]==='string')d.customer.secretText[lang]=g.secretText[lang].slice(0,6000);d.customer.phone=String(g.phone||'').replace(/[^+\d]/g,'').slice(0,20);d.names.portalMode=v.names?.portalMode==='text'?'text':'image';d.design=v1262NormalizeDesign(v.design);d.layout=v1263LayoutNormalize(v.layout);d.neon=v1264Settings(v.neon);d.collector=v1265Settings(v.collector);d.bio=v127Profile(v.bio);d.vault=v128Settings(v.vault);d.access=v129Access(v.access);d.fanCard=v1210Settings(v.fanCard);d.holo13=v13Settings(v.holo13);return d}
 let v126State=null,v126Booting=true,v126TypographyReady=false,v126TypographyPending=null,v126PreviewTimer=0,v126PreviewDirty=true,v126Generating=false;
 function v126Capture(){if(v126State?.holo13?.customerLock){const cl=v126State.holo13.customerLock;const pEl=$('v14StudioCustPin'),mEl=$('v14StudioMasterPin'),dEl=$('v20StudioAllowedDevId'),uEl=$('v20StudioCloudLockUrl');if(pEl&&pEl.value.trim())cl.pin=pEl.value.trim();if(mEl&&mEl.value.trim())cl.masterPin=mEl.value.trim();if(dEl)cl.allowedDeviceId=dEl.value.trim().toUpperCase();if(uEl)cl.cloudLockUrl=uEl.value.trim();}const result=v126Clone(v126State||v126Defaults());result.design=v1262CaptureDesign(result.design);return result}
-function v126Restore(value){v126State=v126Normalize(value);v126LanguageReview=null;v126PreviewDirty=true;v126ResetThumbs();v126RenderPanels();v126RenderMedia();v126NamesUI();v126RenderLanguage();window.v1261PreviewStatus?.();v1262StickerCache.clear();v1262RenderDesign();v1262PassControls($('v124ProductStudio'));window.v1264RenderControls?.();window.v1265RenderControls?.();window.v127RenderOwner?.();window.v128RenderOwner?.();window.v129RenderOwner?.();window.v1210Owner?.();window.v13RenderOwner?.();window.v1263RefreshViewports?.();window.v1263RenderEmbed?.()}
+function v126Restore(value){v126State=v126Normalize(value);v126LanguageReview=null;v126PreviewDirty=true;v126ResetThumbs();v126RenderPanels();v126RenderMedia();v126NamesUI();v126RenderLanguage();window.v1261PreviewStatus?.();v1262StickerCache.clear();v1262RenderDesign();v1262PassControls($('v124ProductStudio'));window.v1264RenderControls?.();window.v1265RenderControls?.();window.v127RenderOwner?.();window.v128RenderOwner?.();window.v129RenderOwner?.();window.v1210Owner?.();window.v13RenderOwner?.();window.v1263RefreshViewports?.();window.v1263RenderEmbed?.();window.v151StudioControls?.();window.v152StudioControls?.();window.v154StudioControls?.()}
 function v126Changed(){v123Changed(false);doGenerate()}
 function v126MediaPhoto(s,key){const m=v126Normalize(s.studio126).media[key];if(m.mode==='gallery'){const photos=v126GalleryPhotos(s);return(m.photo==='first'?photos[0]:photos.find(p=>p.id===m.photo))||null}const src=v12Safe(m.src,'image');return src?{src,name:m.name||V126_MEDIA_LABELS[key],originalSrc:s.studio126?.originals?.[src]||src}:null}
 function v126Original(s,src){return s?.studio126?.originals?.[src]||src}
@@ -6319,7 +6786,7 @@ function v126ResetThumbs(){v126Fingerprints.clear();v126ThumbObserver?.disconnec
 function v126BindThumb(img,src){img.loading='lazy';img.decoding='async';img.width=160;img.height=120;img.style.objectFit='contain';v126ThumbTargets.set(img,src);if(!v126ThumbObserver&&'IntersectionObserver'in window)v126ThumbObserver=new IntersectionObserver(entries=>entries.forEach(entry=>{if(!entry.isIntersecting)return;const el=entry.target,source=v126ThumbTargets.get(el);v126ThumbObserver.unobserve(el);v126ThumbSerial=v126ThumbSerial.then(async()=>{if(!el.isConnected)return;try{let cached=v126Thumbs.get(source);if(!cached){if(!/^data:image\/(?:png|jpeg|webp|avif);base64,/i.test(source)){el.src=source;return}const blob=await(await fetch(source)).blob();let bitmap;if(typeof createImageBitmap==='function')bitmap=await createImageBitmap(blob,{resizeWidth:200,resizeQuality:'medium'});else bitmap=await v12LoadImage(source);const c=document.createElement('canvas'),k=Math.min(1,200/bitmap.width,240/bitmap.height);c.width=Math.max(1,Math.round(bitmap.width*k));c.height=Math.max(1,Math.round(bitmap.height*k));c.getContext('2d').drawImage(bitmap,0,0,c.width,c.height);bitmap.close?.();const thumb=await new Promise(r=>c.toBlob(r,'image/webp',.78));cached=thumb?URL.createObjectURL(thumb):source;v126Thumbs.set(source,cached);if(v126Thumbs.size>60){const[first,url]=v126Thumbs.entries().next().value;v126Thumbs.delete(first);if(url.startsWith('blob:'))URL.revokeObjectURL(url)}}if(el.isConnected&&v126ThumbTargets.get(el)===source)el.src=cached}catch{if(el.isConnected)el.src=source}await new Promise(r=>setTimeout(r,0))})}),{rootMargin:'120px'});if(v126ThumbObserver)v126ThumbObserver.observe(img);else img.src=src}
 function v126PreviewMode(){const choice=(v126State||v126Defaults()).editor.preview;return choice==='auto'?(matchMedia('(max-width:900px),(pointer:coarse)').matches?'manual':'live'):choice}
 function doGenerate(event){if(!v126Booting&&v1261LastPreviewKey&&v1261LastPreviewKey===v1261SnapshotKey()){v126PreviewDirty=false;v1261PreviewStatus();return}v126PreviewDirty=true;window.v1261PreviewStatus?.();window.v122QueueHistory?.();if(v126Booting)return;if(event&&typeof event==='object'&&event.type)return v126GenerateNow();if(v126PreviewMode()==='manual'){const el=$('v126PreviewStatus');if(el)el.textContent='Ada perubahan · tekan Perbarui Preview. Simpan dan ekspor tetap memakai data terbaru.';return}clearTimeout(v126PreviewTimer);v126PreviewTimer=setTimeout(v126GenerateNow,650)}
-function v126GenerateNow(skipHeavyIframe=false){if(v126Booting||v126Generating)return;clearTimeout(v126PreviewTimer);v126Generating=true;try{v6SyncUI();window.v8RefreshVideo?.();const before=performance.now(),raw=generateHTML({noCommit:true}),html=v126Capture().delivery.deduplicate?v126PackPortable(raw).html:raw;generatedHTML=html;const co=$('codeOutput');if(co){co.value=html.length>220000?`/* [MODE HEMAT MEMORI AKTIF — Ukuran HTML: ${(html.length/1048576).toFixed(2)} MB]\n   Gunakan tombol Download HTML / Ekspor ZIP Web untuk mengunduh file penuh. */\n`+html.slice(0,4000)+'\n...':html;}const isHeavyOnMobile=matchMedia('(max-width:900px),(pointer:coarse)').matches&&html.length>12500000;if(!skipHeavyIframe&&!isHeavyOnMobile){if($('previewFrame').srcdoc!==html)$('previewFrame').srcdoc=html;}else if(isHeavyOnMobile&&$('v126PreviewStatus')){$('v126PreviewStatus').textContent='Mode Hemat RAM Aktif ('+v12Size(new Blob([html]).size)+') · Langsung klik Simpan / Download HTML / Ekspor ZIP Web agar HP tidak crash.';}v1261LastPreviewKey=v1261SnapshotKey();v126PreviewDirty=false;if($('v126PreviewStatus')&&!isHeavyOnMobile)$('v126PreviewStatus').textContent='Preview diperbarui · '+v12Size(new Blob([html]).size)+' · '+Math.round(performance.now()-before)+' ms untuk membuat HTML';$('status').className='status good';$('status').textContent='✓ Proyek siap ('+v12Size(new Blob([html]).size)+'). Silakan Simpan atau Ekspor HTML / ZIP Web.'}catch(e){$('status').className='status warn';$('status').textContent='Preview belum berhasil: '+e.message;console.error(e)}finally{v126Generating=false;window.v1261PreviewStatus?.()}}
+function v126GenerateNow(skipHeavyIframe=false){const shouldSkipIframe=skipHeavyIframe===true;if(v126Booting||v126Generating)return;clearTimeout(v126PreviewTimer);v126Generating=true;try{v6SyncUI();window.v8RefreshVideo?.();const before=performance.now(),raw=generateHTML({noCommit:true}),html=v126Capture().delivery.deduplicate?v126PackPortable(raw).html:raw;generatedHTML=html;const co=$('codeOutput');if(co){co.value=html.length>220000?`/* [MODE HEMAT MEMORI AKTIF — Ukuran HTML: ${(html.length/1048576).toFixed(2)} MB]\n   Gunakan tombol Download HTML / Ekspor ZIP Web untuk mengunduh file penuh. */\n`+html.slice(0,4000)+'\n...':html;}const isHeavyOnMobile=matchMedia('(max-width:900px),(pointer:coarse)').matches&&html.length>12500000;if(!shouldSkipIframe&&!isHeavyOnMobile){if($('previewFrame').srcdoc!==html)$('previewFrame').srcdoc=html;}else if(isHeavyOnMobile&&$('v126PreviewStatus')){$('v126PreviewStatus').textContent='Mode Hemat RAM Aktif ('+v12Size(new Blob([html]).size)+') · Langsung klik Simpan / Download HTML / Ekspor ZIP Web agar HP tidak crash.';}v1261LastPreviewKey=v1261SnapshotKey();v126PreviewDirty=false;if($('v126PreviewStatus')&&!isHeavyOnMobile)$('v126PreviewStatus').textContent='Preview diperbarui · '+v12Size(new Blob([html]).size)+' · '+Math.round(performance.now()-before)+' ms untuk membuat HTML';$('status').className='status good';$('status').textContent='✓ Proyek siap ('+v12Size(new Blob([html]).size)+'). Silakan Simpan atau Ekspor HTML / ZIP Web.'}catch(e){$('status').className='status warn';$('status').textContent='Preview belum berhasil: '+e.message;console.error(e)}finally{v126Generating=false;window.v1261PreviewStatus?.()}}
 function v126EnsureTypography(){if(v126TypographyReady)return;v126TypographyReady=true;if(!IMPORTED_TYPO)IMPORTED_TYPO=JSON.parse($('v126TypographyData').textContent);const pending=v126TypographyPending;initTypographyLibrary();initTypography();if(pending)restoreTypoRecipe(pending);v126TypographyPending=null}
 function v126LazyTypographySetup(){const card=$('typographyCard');card.addEventListener('toggle',()=>{if(card.open)v126EnsureTypography()})}
 function v126Ready(){v126Booting=false;v126Init();v1261Init();v1262Init();v1263Init();v1264Init();v1265Init();v127Init();v128Init();v129Init();v1210Init();v13Init();
@@ -6362,7 +6829,7 @@ function v126Ready(){v126Booting=false;v126Init();v1261Init();v1262Init();v1263I
   }
  }catch(e){}
  sessionStorage.removeItem("wypha_boot_guard");
- if(!wasCrashing)v126GenerateNow(true);
+ if(!wasCrashing)v126GenerateNow(false);
 })();
 }
 
@@ -6466,7 +6933,7 @@ const V126_DATA_RE=/data:(?:image|audio|video|application\/pdf)(?:\/[a-zA-Z0-9.+
 function v126PortableBoot(){const element=document.getElementById('wypha-asset-pool'),pool=JSON.parse(element.textContent),urls=new Map(),rev=new Map(),types=new Map();element.remove();const resolve=key=>{if(urls.has(key))return urls.get(key);const data=pool[key];if(!data)return'';const comma=data.indexOf(','),mime=data.slice(5,data.indexOf(';')),raw=atob(data.slice(comma+1)),chunks=[];for(let start=0;start<raw.length;start+=65536){const text=raw.slice(start,start+65536),bytes=new Uint8Array(text.length);for(let i=0;i<text.length;i++)bytes[i]=text.charCodeAt(i);chunks.push(bytes)}const url=URL.createObjectURL(new Blob(chunks,{type:mime}));urls.set(key,url);rev.set(url,key);types.set(url,mime);return url};window.__wyphaAssetPool126=pool;window.__wyphaBlobToKey126=url=>rev.get(url)||'';window.__wyphaKeyToBlob126=key=>resolve(key);window.__wyphaEncodePoolRefs126=str=>typeof str==='string'&&rev.size?str.replace(/blob:[^"'\s)]+/g,m=>rev.has(m)?'__WYPHA_ASSET_'+rev.get(m)+'__':m):str;window.__wyphaDecodePoolRefs126=str=>typeof str==='string'?str.replace(/__WYPHA_ASSET_(a\d+)__/g,(_,k)=>resolve(k)||''):str;window.__wyphaPoolToDataUrl126=str=>typeof str==='string'?str.replace(/__WYPHA_ASSET_(a\d+)__/g,(_,k)=>pool[k]||'').replace(/blob:[^"'\s)]+/g,m=>rev.has(m)?(pool[rev.get(m)]||m):m):str;window.__wyphaMedia126=(url,kind)=>types.get(url)?.startsWith(kind+'/')===true;window.__wyphaExpand126=text=>String(text).replace(/__WYPHA_ASSET_(a\d+)__/g,(_,key)=>resolve(key));window.__wyphaRun126=text=>{const script=document.createElement('script');script.textContent=window.__wyphaExpand126(text);document.currentScript.after(script);script.remove()};window.__wyphaWrite126=text=>document.write(window.__wyphaExpand126(text))}
 function v126PackPortable(html){if(typeof html==="string"&&html.length>35000000)return{html,assets:0,references:0,before:html.length,after:html.length};const pool={},ids=new Map();let references=0;const tokenized=html.replace(V126_DATA_RE,data=>{references++;if(!ids.has(data)){const id='a'+(ids.size+1);ids.set(data,id);pool[id]=data}return'__WYPHA_ASSET_'+ids.get(data)+'__'});if(!ids.size)return{html,assets:0,references:0,before:html.length,after:html.length};const quote=value=>JSON.stringify(value).replace(/</g,'\\u003c');let output=tokenized.replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>|<[^>]+>/gi,(all,attributes,body)=>{if(!/__WYPHA_ASSET_a\d+__/.test(all))return all;if(/^<script\b/i.test(all)){if(/application\/json|\bsrc\s*=/i.test(attributes||''))return all;return'<script'+attributes+'>window.__wyphaRun126('+quote(body)+');<\/script>'}if(/^</.test(all))return'<script>window.__wyphaWrite126('+quote(all)+');<\/script>';return all.replace(/__WYPHA_ASSET_(a\d+)__/g,(_,key)=>pool[key])});const boot='<script type="application/json" id="wypha-asset-pool">'+JSON.stringify(pool).replace(/</g,'\\u003c')+'<\/script><script id="wypha-asset-bootstrap">('+v126PortableBoot.toString()+')();<\/script>';if(/<meta[^>]+charset[^>]*>/i.test(output))output=output.replace(/<meta[^>]+charset[^>]*>/i,tag=>tag+boot);else output=output.replace(/<head\b[^>]*>/i,tag=>tag+'<meta charset="utf-8">'+boot);return{html:output,assets:ids.size,references,before:html.length,after:output.length}}
 function v126ImportPackedHTML(text){const raw=qfsExtractTag(text,'script','wypha-asset-pool');if(!raw)return null;const pool=JSON.parse(raw),embedded=qfsExtractTag(text,'script','wypha-project-data');if(!embedded)throw new Error('Data proyek tidak tersedia di HTML ini.');const data=JSON.parse(embedded,(_,value)=>typeof value==='string'?value.replace(/__WYPHA_ASSET_(a\d+)__/g,(match,key)=>typeof pool[key]==='string'&&/^data:(image\/|audio\/|video\/|application\/pdf)/.test(pool[key])?pool[key]:match):value);if(!DEFAULTS[data.product])throw new Error('Produk HTML tidak dikenali.');return data}
-function currentCode(){const html=generateHTML({noCommit:true});const packed=v126Capture().delivery.deduplicate?v126PackPortable(html):{html,assets:0,references:0,before:html.length,after:html.length};generatedHTML=packed.html;$('codeOutput').value=packed.html;if($('v126PreviewStatus'))$('v126PreviewStatus').textContent='HTML customer siap · '+v12Size(new Blob([packed.html]).size)+(packed.assets?' · '+packed.assets+' media unik / '+packed.references+' referensi':'');return packed.html}
+function currentCode(){const html=generateHTML({noCommit:true});const packed=v126Capture().delivery.deduplicate?v126PackPortable(html):{html,assets:0,references:0,before:html.length,after:html.length};generatedHTML=packed.html;const co=$('codeOutput');if(co){co.value=packed.html.length>220000?`/* [MODE HEMAT MEMORI AKTIF — Ukuran HTML: ${(packed.html.length/1048576).toFixed(2)} MB] */\n`+packed.html.slice(0,4000)+'\n...':packed.html;}if($('v126PreviewStatus'))$('v126PreviewStatus').textContent='HTML customer siap · '+v12Size(new Blob([packed.html]).size)+(packed.assets?' · '+packed.assets+' media unik / '+packed.references+' referensi':'');return packed.html}
 function v126Blob(data){const comma=data.indexOf(','),mime=data.slice(5,data.indexOf(';')),raw=atob(data.slice(comma+1)),parts=[];for(let i=0;i<raw.length;i+=65536){const part=raw.slice(i,i+65536),bytes=new Uint8Array(part.length);for(let k=0;k<part.length;k++)bytes[k]=part.charCodeAt(k);parts.push(bytes)}return new Blob(parts,{type:mime})}
 function v126ImageInfo(bytes,type){const x=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),ascii=(at,n)=>String.fromCharCode(...bytes.slice(at,at+n));try{if(type==='image/png'){let animated=false;for(let i=8;i+8<bytes.length;){const size=x.getUint32(i);if(ascii(i+4,4)==='acTL'){animated=true;break}if(size>bytes.length-i-12)break;i+=size+12}return{width:x.getUint32(16),height:x.getUint32(20),animated}}if(type==='image/jpeg'){for(let i=2;i+9<bytes.length;){if(bytes[i]!==255){i++;continue}const marker=bytes[i+1];i+=2;if(marker===216||marker===217)continue;const size=x.getUint16(i);if([192,193,194,195,197,198,199,201,202,203,205,206,207].includes(marker))return{width:x.getUint16(i+5),height:x.getUint16(i+3)};if(size<2)break;i+=size}}if(type==='image/webp'){const tag=ascii(12,4);if(tag==='VP8X')return{width:1+bytes[24]+(bytes[25]<<8)+(bytes[26]<<16),height:1+bytes[27]+(bytes[28]<<8)+(bytes[29]<<16),animated:!!(bytes[20]&2)};if(tag==='VP8 ')return{width:x.getUint16(26,true)&16383,height:x.getUint16(28,true)&16383};if(tag==='VP8L'){const b=x.getUint32(21,true);return{width:(b&16383)+1,height:((b>>>14)&16383)+1}}}}catch{}return{}}
 async function v126WebPreview(blob,max){if(!/^image\/(?:png|jpeg|webp|avif)$/.test(blob.type))return blob;const info=v126ImageInfo(new Uint8Array(await blob.slice(0,262144).arrayBuffer()),blob.type);if(info.animated)return blob;let bitmap;try{const k=info.width?Math.min(1,max/info.width,max/info.height):1,w=info.width?Math.max(1,Math.round(info.width*k)):undefined,h=info.height?Math.max(1,Math.round(info.height*k)):undefined;if(typeof createImageBitmap==='function')bitmap=await createImageBitmap(blob,w?{resizeWidth:w,resizeHeight:h,resizeQuality:'high'}:{});else{const url=URL.createObjectURL(blob);try{bitmap=await v12LoadImage(url)}finally{URL.revokeObjectURL(url)}}const scale=Math.min(1,max/bitmap.width,max/bitmap.height),c=document.createElement('canvas');c.width=Math.max(1,Math.round(bitmap.width*scale));c.height=Math.max(1,Math.round(bitmap.height*scale));c.getContext('2d').drawImage(bitmap,0,0,c.width,c.height);bitmap.close?.();const preview=await new Promise(r=>c.toBlob(r,'image/webp',.86));return preview&&(preview.size<blob.size*.95||info.width>max||info.height>max)?preview:blob}catch{bitmap?.close?.();return blob}}
@@ -14849,9 +15316,12 @@ function v13GuideHTML() {
 function v13Init() {
   window.alert = msg => {
     const text = String(msg || '');
-    if (typeof suiteToast === 'function') suiteToast('⚠ ' + text);
-    const st = document.getElementById('status');
-    if (st) { st.className = 'status warn'; st.textContent = '⚠ ' + text; }
+    if (typeof qfsVaultStatus === 'function') qfsVaultStatus('⚠ ' + text, 'warn');
+    else {
+      if (typeof suiteToast === 'function') suiteToast('⚠ ' + text);
+      const st = document.getElementById('status');
+      if (st) { st.className = 'status warn'; st.textContent = '⚠ ' + text; }
+    }
   };
 
   const style = document.createElement('style');
@@ -48970,7 +49440,8 @@ function v154StudioControls() {
   }
 
   const visGrid = document.querySelector('#v11VisibilityPanel .v11-grid') || document.getElementById('v11VisibilityPanel');
-  if (visGrid && !$('v154QuickVisBox')) {
+  if ($('v154QuickVisBox')) $('v154QuickVisBox').remove();
+  if (visGrid) {
     const box = document.createElement('div');
     box.id = 'v154QuickVisBox';
     box.style.cssText = 'margin-top:8px;padding:10px;border-radius:12px;border:1px solid rgba(56,189,248,.45);background:rgba(6,16,36,.82);display:grid;gap:6px';
