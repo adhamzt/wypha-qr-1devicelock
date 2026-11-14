@@ -1,6 +1,6 @@
-// Scope-aware app-shell cache for WYPHA Studio & Customer Microsites V21
+// Scope-aware app-shell cache for WYPHA Studio & Customer Microsites V22
 const PREFIX = 'wypha-v13.3.0';
-const CACHE = PREFIX + '-portal-v21-bulk-cloud-photo-gen-20261114-' + encodeURIComponent(self.registration.scope);
+const CACHE = PREFIX + '-portal-v22-bulk-cloud-photo-gen-20261114-' + encodeURIComponent(self.registration.scope);
 const SHELL = ['./', 'index.html', 'rescue.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'].map(p => new URL(p, self.registration.scope).href);
 
 self.addEventListener('install', e => {

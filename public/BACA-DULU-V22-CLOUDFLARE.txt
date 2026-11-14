@@ -1,0 +1,23 @@
+================================================================================
+WYPHA MAGIC QR STUDIO & MICROSITE — VERSI V22 (MAKS 2 PERANGKAT & KUNCI GANDA)
+================================================================================
+PEMBARUAN UTAMA PADA PAKET INI:
+1. KLAIM KUNCI MAKSIMAL 2 PERANGKAT (SLOT 1/2 & SLOT 2/2):
+   - Setiap microsite yang diekspor kini mengizinkan klaim kunci untuk MAKSIMAL
+     2 PERANGKAT SAJA (HP ke-1 dan HP ke-2).
+   - Perangkat ke-3 dan seterusnya OTOMATIS DITOLAK dan hanya berada dalam Mode
+     Lihat (Read-Only), kecuali di-reset terlebih dahulu melalui Google Sheets
+     yang memuat script (`public/GOOGLE-APPS-SCRIPT-2-DEVICE-LOCK-V22.txt`).
+   - Di Google Sheets Anda, terdapat menu "🛡️ Admin Kunci 2-HP WYPHA" untuk:
+     • Mereset penuh baris customer (kembali ke 0/2), atau
+     • Menghapus HP ke-2 saja (menyisakan HP ke-1 menjadi 1/2).
+
+2. MASTER PIN SEBAGAI KUNCI GANDA (PIN CADANGAN YANG TUNDUK PADA BATAS 2 HP):
+   - Master PIN kini tidak lagi bisa membobol batas kuota perangkat apabila
+     slot 2/2 sudah terisi penuh.
+   - Master PIN berfungsi murni sebagai KUNCI GANDA (PIN Cadangan) dari PIN
+     pertama pada proyek tersebut (contoh: PIN utama `5555` dan Master PIN
+     `WYPHA-ARYA` — jika lupa PIN pertama `5555`, pengguna dapat memasukkan
+     `WYPHA-ARYA`, namun tetap wajib berada di dalam kuota maksimal 2 perangkat
+     yang terdaftar di Google Sheets).
+================================================================================
