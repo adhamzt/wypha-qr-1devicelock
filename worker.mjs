@@ -1,4 +1,4 @@
-// Cloudflare Worker + Static Assets (WYPHA V24):
+// Cloudflare Worker + Static Assets (WYPHA V25):
 // 1. /api/device-lock  -> Klaim Kunci Maksimal 2 Perangkat
 // 2. /api/cloud-upload -> Jembatan Upload Otomatis Foto/Aset ke Cloudflare R2
 // 3. /cdn/<folder>/<file> -> Penayangan Gambar Cepat dari R2 Bucket
