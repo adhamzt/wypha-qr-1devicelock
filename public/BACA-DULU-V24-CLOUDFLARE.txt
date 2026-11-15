@@ -1,0 +1,15 @@
+=================================================================
+WYPHA-PRINTLAB QR FANTASY STUDIO · V24 (CLOUDFLARE PAGES & GDRIVE CLOUD BRIDGE EDITION)
+=================================================================
+
+PEMBARUAN V24 (DUAL AUTO-UPLOAD CLOUD BRIDGE: GOOGLE DRIVE & CLOUDFLARE R2):
+1. Jembatan Upload Otomatis ke Cloud (Bisa Pilih Google Drive atau Cloudflare R2):
+   - Tersedia di Menu 1 -> MEDIA PERSONAL -> tombol "🚀 Jembatan Auto-Upload Cloud (GDrive / Cloudflare)".
+   - Mendukung 2 Penyedia Cloud sekaligus:
+     a) Google Drive (via Google Apps Script Web App): otomatis membuat subfolder per nama proyek/klien di Google Drive, mengatur izin publik, dan mengembalikan link thumbnail cepat (`https://lh3.googleusercontent.com/d/FILE_ID=w1600`).
+     b) Cloudflare Worker + R2 Bucket (`/api/cloud-upload` & `/cdn/*` di dalam `worker.mjs`): mengunggah foto WebP langsung ke R2 Bucket Cloudflare Anda dan menayangkannya lewat rute cepat `/cdn/<folder>/<file>`.
+2. Dua Mode Kerja Fleksibel:
+   - Mode Otomatis (Real-Time Saat Pilih Foto): Centang "⚡ Aktifkan Auto-Upload Saat Pilih Foto dari Galeri", maka setiap kali Anda memilih foto dari HP/PC, foto otomatis dikompres ke WebP, diunggah ke Cloud, dan langsung menjadi link URL ringan tanpa menyimpan Base64 berat.
+   - Mode Tombol 1 Klik (Konversi Massal): Klik tombol "☁️ Unggah & Ubah Semua Foto Proyek Jadi Link Cloud Sekarang" untuk mengubah seluruh foto Base64 yang sudah terlanjur ada di dalam proyek menjadi link URL Cloud sebelum export HTML.
+3. Skrip All-in-One Google Apps Script V24:
+   - Tersedia tombol "📋 Salin Kode Google Apps Script V24" langsung di dalam Studio (serta file `public/GOOGLE-APPS-SCRIPT-2-DEVICE-LOCK-AND-DRIVE-UPLOAD-V24.txt`) yang menggabungkan fitur Klaim Kunci Maksimal 2 Perangkat + Auto-Upload Foto Google Drive dalam 1 URL script.

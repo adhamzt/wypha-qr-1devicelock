@@ -1,0 +1,249 @@
+/**
+ * ============================================================================
+ * WYPHA STUDIO V24 — GOOGLE APPS SCRIPT TERPADU (ALL-IN-ONE)
+ * Mendukung 2 Fitur Sekaligus dalam 1 URL Web App:
+ *   1. Jembatan Upload Otomatis Foto/Aset ke Google Drive (Auto Folder per Klien & Link Thumbnail Cepat)
+ *   2. Sistem Klaim Kunci Maksimal 2 Perangkat + Reset di Google Sheets
+ *
+ * CARA PASANG (HANYA 2 MENIT):
+ * 1. Buka Google Sheets Anda -> klik menu Extensions (Ekstensi) -> Apps Script.
+ * 2. Hapus kode lama, lalu tempel (Paste) seluruh kode ini dan tekan Simpan (Ctrl+S).
+ * 3. Klik tombol "Deploy" -> "New deployment" (atau "Manage deployments" -> Edit versi baru).
+ * 4. Pilih jenis: "Web app", Execute as: "Me", Who has access: "Anyone" (Siapa saja).
+ * 5. Klik Deploy, berikan izin (Authorize) untuk Google Sheets & Google Drive, lalu salin URL Web App.
+ * 6. Tempel URL Web App tersebut pada panel "☁️ Jembatan Upload Otomatis ke Cloud V24" di WYPHA Studio!
+ * ============================================================================
+ */
+
+const SHEET_NAME = 'WyphaDeviceLocks';
+const MAX_DEVICES = 2;
+const DEFAULT_ROOT_FOLDER_NAME = 'WYPHA-CLOUD-MEDIA';
+const OPTIONAL_UPLOAD_TOKEN = ''; // Kosongkan, atau isi PIN rahasia jika ingin mengunci izin upload
+
+function getOrCreateSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+    sheet.appendRow([
+      'Project ID',
+      'Nama Customer',
+      'Perangkat 1 (Owner 1)',
+      'Perangkat 2 (Owner 2)',
+      'Jumlah Terpakai',
+      'Waktu Klaim Pertama',
+      'Terakhir Diakses',
+      'Total Akses',
+      'Ketik RESET Untuk Mereset'
+    ]);
+    sheet.getRange('A1:I1').setFontWeight('bold').setBackground('#d9ead3');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getOrCreateClientFolder(folderName, parentFolderId) {
+  let rootFolder = null;
+  if (parentFolderId && String(parentFolderId).trim()) {
+    try {
+      rootFolder = DriveApp.getFolderById(String(parentFolderId).trim());
+    } catch (e) {
+      rootFolder = null;
+    }
+  }
+  if (!rootFolder) {
+    const it = DriveApp.getFoldersByName(DEFAULT_ROOT_FOLDER_NAME);
+    rootFolder = it.hasNext() ? it.next() : DriveApp.createFolder(DEFAULT_ROOT_FOLDER_NAME);
+  }
+  const cleanSub = String(folderName || 'proyek-wypha').trim().replace(/[\\/:*?"<>|]+/g, '-') || 'proyek-wypha';
+  const subIt = rootFolder.getFoldersByName(cleanSub);
+  const clientFolder = subIt.hasNext() ? subIt.next() : rootFolder.createFolder(cleanSub);
+  try {
+    clientFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) {}
+  return clientFolder;
+}
+
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  return handleRequest(e && e.parameter ? e.parameter : {});
+}
+
+function doPost(e) {
+  let body = {};
+  try {
+    if (e && e.postData && e.postData.contents) {
+      body = JSON.parse(e.postData.contents);
+    } else if (e && e.parameter) {
+      body = e.parameter;
+    }
+  } catch (err) {
+    return jsonResponse({ ok: false, error: 'INVALID_JSON', message: String(err) });
+  }
+  return handleRequest(body);
+}
+
+function handleRequest(body) {
+  const action = String(body.action || 'claim_or_verify').trim();
+
+  // --- FITUR A: PING & AUTO-UPLOAD FOTO KE GOOGLE DRIVE ---
+  if (action === 'ping_cloud') {
+    return jsonResponse({
+      ok: true,
+      provider: 'gdrive',
+      mode: 'GOOGLE_DRIVE_ACTIVE',
+      message: 'Koneksi Google Apps Script + Google Drive aktif dan siap mengunggah foto otomatis!'
+    });
+  }
+
+  if (action === 'upload_photo') {
+    try {
+      if (OPTIONAL_UPLOAD_TOKEN && String(body.token || '').trim() !== OPTIONAL_UPLOAD_TOKEN) {
+        return jsonResponse({ ok: false, error: 'INVALID_UPLOAD_TOKEN', message: 'Token keamanan upload tidak sesuai.' });
+      }
+      const dataUrl = String(body.dataUrl || '');
+      const match = dataUrl.match(/^data:([^;,]+)?;base64,(.+)$/i);
+      if (!match) {
+        return jsonResponse({ ok: false, error: 'INVALID_DATA_URL', message: 'Format dataUrl Base64 tidak valid.' });
+      }
+      const mimeType = match[1] || 'image/webp';
+      const base64Data = match[2];
+      const bytes = Utilities.base64Decode(base64Data);
+      const fileName = String(body.fileName || ('foto-' + new Date().getTime() + '.webp')).trim();
+      const folderName = String(body.folder || body.projectId || 'proyek-wypha').trim();
+      const parentFolderId = String(body.parentFolderId || '').trim();
+
+      const folder = getOrCreateClientFolder(folderName, parentFolderId);
+      const blob = Utilities.newBlob(bytes, mimeType, fileName);
+      const file = folder.createFile(blob);
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (e) {}
+
+      const fileId = file.getId();
+      // Link CDN Thumbnail Google (cepat, stabil di <img> microsite, dan tidak terblokir halaman warning Drive)
+      const thumbUrl = 'https://lh3.googleusercontent.com/d/' + fileId + '=w1600';
+      const directViewUrl = 'https://drive.google.com/uc?export=view&id=' + fileId;
+
+      return jsonResponse({
+        ok: true,
+        provider: 'gdrive',
+        fileId: fileId,
+        fileName: file.getName(),
+        folderName: folder.getName(),
+        url: thumbUrl,
+        thumbnailUrl: thumbUrl,
+        driveViewUrl: directViewUrl
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  // --- FITUR B: KLAIM KUNCI MAKSIMAL 2 PERANGKAT ---
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = getOrCreateSheet();
+    const projectId = String(body.projectId || 'wypha').trim();
+    const customerName = String(body.customerName || '').trim();
+    const deviceId = String(body.deviceId || '').trim().toUpperCase();
+    const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+
+    const data = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === projectId) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (action === 'reset') {
+      if (rowIndex > 0) {
+        sheet.getRange(rowIndex, 3, 1, 3).setValues([['', '', 0]]);
+        sheet.getRange(rowIndex, 7).setValue(nowStr);
+        sheet.getRange(rowIndex, 9).setValue('');
+      }
+      return jsonResponse({ ok: true, status: 'RESET_SUCCESS', projectId: projectId, maxDevices: MAX_DEVICES, usedSlots: 0, ownerDeviceIds: [] });
+    }
+
+    if (!deviceId) {
+      return jsonResponse({ ok: false, reason: 'MISSING_DEVICE_ID' });
+    }
+
+    if (rowIndex === -1) {
+      sheet.appendRow([projectId, customerName || projectId, deviceId, '', 1, nowStr, nowStr, 1, '']);
+      return jsonResponse({
+        ok: true,
+        status: 'CLAIMED_SLOT_1_OF_2',
+        slot: 1,
+        maxDevices: MAX_DEVICES,
+        usedSlots: 1,
+        ownerDeviceIds: [deviceId],
+        ownerDeviceId: deviceId
+      });
+    }
+
+    const rowVals = sheet.getRange(rowIndex, 1, 1, 9).getValues()[0];
+    const resetCmd = String(rowVals[8] || '').trim().toUpperCase();
+    let dev1 = String(rowVals[2] || '').trim().toUpperCase();
+    let dev2 = String(rowVals[3] || '').trim().toUpperCase();
+
+    if (resetCmd === 'RESET' || resetCmd === 'YA' || resetCmd === '1') {
+      dev1 = '';
+      dev2 = '';
+      sheet.getRange(rowIndex, 9).setValue('');
+    }
+
+    const owners = [dev1, dev2].filter(Boolean);
+    const visits = (Number(rowVals[7]) || 0) + 1;
+    if (customerName && !String(rowVals[1] || '').trim()) {
+      sheet.getRange(rowIndex, 2).setValue(customerName);
+    }
+
+    if (owners.indexOf(deviceId) !== -1) {
+      sheet.getRange(rowIndex, 7, 1, 2).setValues([[nowStr, visits]]);
+      return jsonResponse({
+        ok: true,
+        status: 'VERIFIED_OWNER_DEVICE',
+        slot: owners.indexOf(deviceId) + 1,
+        maxDevices: MAX_DEVICES,
+        usedSlots: owners.length,
+        ownerDeviceIds: owners,
+        ownerDeviceId: owners.join(' | ')
+      });
+    }
+
+    if (owners.length < MAX_DEVICES) {
+      owners.push(deviceId);
+      sheet.getRange(rowIndex, 3, 1, 3).setValues([[owners[0] || '', owners[1] || '', owners.length]]);
+      sheet.getRange(rowIndex, 7, 1, 2).setValues([[nowStr, visits]]);
+      return jsonResponse({
+        ok: true,
+        status: owners.length === 1 ? 'CLAIMED_SLOT_1_OF_2' : 'CLAIMED_SLOT_2_OF_2',
+        slot: owners.length,
+        maxDevices: MAX_DEVICES,
+        usedSlots: owners.length,
+        ownerDeviceIds: owners,
+        ownerDeviceId: owners.join(' | ')
+      });
+    }
+
+    return jsonResponse({
+      ok: false,
+      status: 'REJECTED_MAX_2_DEVICES',
+      reason: 'MAX_2_DEVICES_ALREADY_CLAIMED',
+      maxDevices: MAX_DEVICES,
+      usedSlots: owners.length,
+      ownerDeviceIds: owners,
+      ownerDeviceId: owners.join(' | ')
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
