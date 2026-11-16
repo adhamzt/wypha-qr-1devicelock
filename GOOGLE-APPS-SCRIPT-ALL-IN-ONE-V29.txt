@@ -1,0 +1,640 @@
+/**
+ * ============================================================================
+ * WYPHA STUDIO V29 — GOOGLE APPS SCRIPT SMART CLOUD BACKEND (ALL-IN-ONE)
+ * ============================================================================
+ * Cukup pasang 1 Script ini di Google Sheets Anda untuk mengaktifkan 9 Fitur:
+ *   1. Sistem Klaim Kunci Maksimal 2 Perangkat + Reset di Tab "WyphaDeviceLocks"
+ *   2. Jembatan Upload Otomatis Foto/Aset ke Google Drive ("WYPHA-CLOUD-MEDIA")
+ *   3. Remote Unlock Paket Game dari Kolom J Google Sheets (BASIC_5 / STANDAR_12 / INTERAKTIF_15 / QURAN_12 / STEM_15 / ULTIMATE_45)
+ *   4. Auto-Backup & Restore Progres Anak Pindah HP 1-Klik (Disimpan di Drive)
+ *   5. Dinding Doa & Buku Tamu Keluarga Live di Tab "WyphaGuestbook"
+ *   6. Kirim E-Raport Otomatis ke Email Orang Tua via Gmail (MailApp)
+ *   7. Papan Peringkat Bintang Komunitas / Sekolah di Tab "WyphaLeaderboard"
+ *   8. Banner Pengumuman & Promo Terpusat Otomatis di Atas Microsite ("WyphaBroadcast")
+ *   9. Arsip Rekaman Suara Anak & Jurnal Tumbuh Kembang di Tab "WyphaMilestones"
+ * ============================================================================
+ */
+
+const SHEET_LOCKS = 'WyphaDeviceLocks';
+const SHEET_GUESTBOOK = 'WyphaGuestbook';
+const SHEET_LEADERBOARD = 'WyphaLeaderboard';
+const SHEET_BROADCAST = 'WyphaBroadcast';
+const SHEET_MILESTONES = 'WyphaMilestones';
+const MAX_DEVICES = 2;
+const DEFAULT_ROOT_FOLDER_NAME = 'WYPHA-CLOUD-MEDIA';
+const OPTIONAL_UPLOAD_TOKEN = '';
+
+function getOrCreateLockSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_LOCKS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_LOCKS);
+    sheet.appendRow([
+      'Project ID',
+      'Nama Customer',
+      'Perangkat 1 (Owner 1)',
+      'Perangkat 2 (Owner 2)',
+      'Jumlah Terpakai',
+      'Waktu Klaim Pertama',
+      'Terakhir Diakses',
+      'Total Akses',
+      'Ketik RESET Untuk Mereset',
+      'Paket Game Remote (BASIC_5 / STANDAR_12 / INTERAKTIF_15 / QURAN_12 / STEM_15 / ULTIMATE_45)'
+    ]);
+    sheet.getRange('A1:J1').setFontWeight('bold').setBackground('#d9ead3');
+    sheet.setFrozenRows(1);
+  } else if (sheet.getLastColumn() < 10) {
+    sheet.getRange(1, 10).setValue('Paket Game Remote (BASIC_5 / STANDAR_12 / INTERAKTIF_15 / QURAN_12 / STEM_15 / ULTIMATE_45)')
+      .setFontWeight('bold').setBackground('#d9ead3');
+  }
+  return sheet;
+}
+
+function getOrCreateGuestbookSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_GUESTBOOK);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_GUESTBOOK);
+    sheet.appendRow(['Waktu', 'Project ID', 'Nama Pengirim', 'Hubungan Keluarga', 'Doa & Ucapan', 'Emoji', 'Status (TAMPIL / HAPUS)']);
+    sheet.getRange('A1:G1').setFontWeight('bold').setBackground('#cfe2f3');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getOrCreateLeaderboardSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_LEADERBOARD);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_LEADERBOARD);
+    sheet.appendRow(['Project ID', 'Nama Anak', 'Total Bintang', 'Lencana Terbuka', 'Rata-rata Skor', 'Game Terakhir', 'Waktu Update']);
+    sheet.getRange('A1:G1').setFontWeight('bold').setBackground('#fff2cc');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getOrCreateBroadcastSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_BROADCAST);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_BROADCAST);
+    sheet.appendRow(['Aktif (YA/TIDAK)', 'Target Project ID (ALL atau ID)', 'Judul Pengumuman / Promo', 'Isi Pesan Promo', 'Teks Tombol CTA', 'Link Tujuan / WhatsApp']);
+    sheet.getRange('A1:F1').setFontWeight('bold').setBackground('#fce5cd');
+    sheet.setFrozenRows(1);
+    sheet.appendRow([
+      'TIDAK',
+      'ALL',
+      '✨ Promo Upgrade 45 Game Interaktif V29!',
+      'Kini hadir 10 Game Interaktif Sentuh baru (Jungkat-Jungkit Angka, Putar Jam, Meja Kasir, Sirkuit Listrik, Simulasi Wudhu). Hubungi Admin untuk buka semua 45 game!',
+      '💬 Hubungi Admin via WhatsApp',
+      'https://wa.me/6281234567890'
+    ]);
+  }
+  return sheet;
+}
+
+function getOrCreateMilestonesSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_MILESTONES);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_MILESTONES);
+    sheet.appendRow(['Waktu', 'Project ID', 'Nama Anak', 'Judul Momen / Tumbuh Kembang', 'Usia / Tinggi / Berat', 'Catatan Orang Tua', 'Link Audio / Foto Drive', 'File ID']);
+    sheet.getRange('A1:H1').setFontWeight('bold').setBackground('#ead1dc');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getOrCreateClientFolder(folderName, parentFolderId) {
+  let rootFolder = null;
+  if (parentFolderId && String(parentFolderId).trim()) {
+    try { rootFolder = DriveApp.getFolderById(String(parentFolderId).trim()); } catch (e) { rootFolder = null; }
+  }
+  if (!rootFolder) {
+    const it = DriveApp.getFoldersByName(DEFAULT_ROOT_FOLDER_NAME);
+    rootFolder = it.hasNext() ? it.next() : DriveApp.createFolder(DEFAULT_ROOT_FOLDER_NAME);
+  }
+  const cleanSub = String(folderName || 'proyek-wypha').trim().replace(/[\\/:*?"<>|]+/g, '-') || 'proyek-wypha';
+  const subIt = rootFolder.getFoldersByName(cleanSub);
+  const clientFolder = subIt.hasNext() ? subIt.next() : rootFolder.createFolder(cleanSub);
+  try { clientFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  return clientFolder;
+}
+
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  return handleRequest(e && e.parameter ? e.parameter : {});
+}
+
+function doPost(e) {
+  let body = {};
+  try {
+    if (e && e.postData && e.postData.contents) {
+      body = JSON.parse(e.postData.contents);
+    } else if (e && e.parameter) {
+      body = e.parameter;
+    }
+  } catch (err) {
+    return jsonResponse({ ok: false, error: 'INVALID_JSON', message: String(err) });
+  }
+  return handleRequest(body);
+}
+
+function readActiveBroadcast(projectId) {
+  try {
+    const bSheet = getOrCreateBroadcastSheet();
+    const rows = bSheet.getDataRange().getValues();
+    const targetProj = String(projectId || '').trim().toLowerCase();
+    for (let i = 1; i < rows.length; i++) {
+      const active = String(rows[i][0] || '').trim().toUpperCase();
+      const target = String(rows[i][1] || 'ALL').trim();
+      if ((active === 'YA' || active === 'YES' || active === 'ON' || active === '1' || active === 'TRUE' || active === 'AKTIF') &&
+          (target.toUpperCase() === 'ALL' || target.toLowerCase() === targetProj)) {
+        return {
+          active: true,
+          title: String(rows[i][2] || '').trim(),
+          message: String(rows[i][3] || '').trim(),
+          ctaLabel: String(rows[i][4] || 'Info Selengkapnya').trim(),
+          ctaUrl: String(rows[i][5] || '').trim()
+        };
+      }
+    }
+  } catch (e) {}
+  return { active: false };
+}
+
+function readRemoteTierForProject(projectId, fallbackDefaultTier) {
+  try {
+    const lSheet = getOrCreateLockSheet();
+    const rows = lSheet.getDataRange().getValues();
+    const targetProj = String(projectId || '').trim().toLowerCase();
+    for (let i = rows.length - 1; i >= 1; i--) {
+      if (String(rows[i][0] || '').trim().toLowerCase() === targetProj) {
+        const val = String(rows[i][9] || '').trim();
+        if (val) return val;
+      }
+    }
+  } catch (e) {}
+  return String(fallbackDefaultTier || '').trim();
+}
+
+function upsertRemoteTierForProject(projectId, tierCode, customerName, nowStr) {
+  const lSheet = getOrCreateLockSheet();
+  const rows = lSheet.getDataRange().getValues();
+  const targetProj = String(projectId || '').trim().toLowerCase();
+  let foundRow = -1;
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][0] || '').trim().toLowerCase() === targetProj) {
+      foundRow = i + 1;
+      break;
+    }
+  }
+  const cleanTier = String(tierCode || 'BASIC_5').trim();
+  if (foundRow > 0) {
+    lSheet.getRange(foundRow, 10).setValue(cleanTier);
+  } else {
+    lSheet.appendRow([projectId, customerName || projectId, '', '', 0, nowStr, nowStr, 0, '', cleanTier]);
+  }
+  return cleanTier;
+}
+
+function handleRequest(body) {
+  const action = String(body.action || 'claim_or_verify').trim();
+  const projectId = String(body.projectId || body.folder || 'wypha').trim();
+  const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+
+  // --- 1. PING CLOUD ---
+  if (action === 'ping_cloud') {
+    getOrCreateLockSheet();
+    getOrCreateGuestbookSheet();
+    getOrCreateLeaderboardSheet();
+    getOrCreateBroadcastSheet();
+    getOrCreateMilestonesSheet();
+    return jsonResponse({
+      ok: true,
+      version: 'V29-ALL-IN-ONE',
+      scriptVersion: 'V29',
+      provider: 'gdrive',
+      mode: 'GOOGLE_DRIVE_AND_SHEETS_V29_ACTIVE',
+      message: 'Koneksi Google Apps Script All-in-One V29 aktif (5 Tab Sheets & Folder Google Drive siap digunakan)!'
+    });
+  }
+
+  // --- 1B. SET REMOTE TIER DIRECTLY FROM STUDIO ---
+  if (action === 'set_remote_tier') {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      const updatedTier = upsertRemoteTierForProject(projectId, body.remoteTier || body.defaultRemoteTier || 'BASIC_5', body.customerName || '', nowStr);
+      return jsonResponse({
+        ok: true,
+        scriptVersion: 'V29',
+        projectId: projectId,
+        remoteTier: updatedTier,
+        message: 'Kolom J di WyphaDeviceLocks berhasil diupdate ke paket: ' + updatedTier
+      });
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  // --- 2. UPLOAD FOTO / ASET KE GOOGLE DRIVE ---
+  if (action === 'upload_photo') {
+    try {
+      if (OPTIONAL_UPLOAD_TOKEN && String(body.token || '').trim() !== OPTIONAL_UPLOAD_TOKEN) {
+        return jsonResponse({ ok: false, error: 'INVALID_UPLOAD_TOKEN', message: 'Token keamanan upload tidak sesuai.' });
+      }
+      const dataUrl = String(body.dataUrl || '');
+      const match = dataUrl.match(/^data:([^;,]+)?;base64,(.+)$/i);
+      if (!match) return jsonResponse({ ok: false, error: 'INVALID_DATA_URL', message: 'Format dataUrl Base64 tidak valid.' });
+      const mimeType = match[1] || 'image/webp';
+      const bytes = Utilities.base64Decode(match[2]);
+      const fileName = String(body.fileName || ('foto-' + new Date().getTime() + '.webp')).trim();
+      const folderName = String(body.folder || projectId || 'proyek-wypha').trim();
+      const folder = getOrCreateClientFolder(folderName, String(body.parentFolderId || '').trim());
+      const file = folder.createFile(Utilities.newBlob(bytes, mimeType, fileName));
+      try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+      const fileId = file.getId();
+      const thumbUrl = 'https://lh3.googleusercontent.com/d/' + fileId + '=w1600';
+      const directViewUrl = 'https://drive.google.com/uc?export=view&id=' + fileId;
+      return jsonResponse({
+        ok: true,
+        provider: 'gdrive',
+        fileId: fileId,
+        fileName: file.getName(),
+        folderName: folder.getName(),
+        url: thumbUrl,
+        thumbnailUrl: thumbUrl,
+        driveViewUrl: directViewUrl
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  // --- 3. SYNC HUB (Remote Tier Unlocker + Broadcast + Guestbook + Leaderboard + Milestones) ---
+  if (action === 'sync_hub') {
+    const incomingDefaultTier = String(body.defaultRemoteTier || '').trim();
+    if (body.forceSyncTier && incomingDefaultTier) {
+      upsertRemoteTierForProject(projectId, incomingDefaultTier, body.customerName || '', nowStr);
+    }
+    const remoteTier = readRemoteTierForProject(projectId, incomingDefaultTier);
+    const broadcast = readActiveBroadcast(projectId);
+
+    const gbSheet = getOrCreateGuestbookSheet();
+    const gbRows = gbSheet.getDataRange().getValues();
+    const guestbook = [];
+    for (let i = gbRows.length - 1; i >= 1 && guestbook.length < 30; i--) {
+      if (String(gbRows[i][1] || '').trim() === projectId && String(gbRows[i][6] || 'TAMPIL').trim().toUpperCase() !== 'HAPUS') {
+        guestbook.push({
+          timestamp: String(gbRows[i][0] || ''),
+          sender: String(gbRows[i][2] || 'Keluarga'),
+          relation: String(gbRows[i][3] || 'Kerabat'),
+          message: String(gbRows[i][4] || ''),
+          emoji: String(gbRows[i][5] || '🤲')
+        });
+      }
+    }
+
+    const lbSheet = getOrCreateLeaderboardSheet();
+    const lbRows = lbSheet.getDataRange().getValues();
+    const leaderboard = [];
+    for (let i = 1; i < lbRows.length; i++) {
+      if (String(lbRows[i][1] || '').trim()) {
+        leaderboard.push({
+          projectId: String(lbRows[i][0] || ''),
+          childName: String(lbRows[i][1] || 'Anak Hebat'),
+          totalStars: Number(lbRows[i][2]) || 0,
+          badgesCount: Number(lbRows[i][3]) || 0,
+          avgScore: Number(lbRows[i][4]) || 0,
+          lastGame: String(lbRows[i][5] || ''),
+          updatedAt: String(lbRows[i][6] || '')
+        });
+      }
+    }
+    leaderboard.sort(function(a, b) { return (b.totalStars - a.totalStars) || (b.avgScore - a.avgScore); });
+
+    const msSheet = getOrCreateMilestonesSheet();
+    const msRows = msSheet.getDataRange().getValues();
+    const milestones = [];
+    for (let i = msRows.length - 1; i >= 1 && milestones.length < 25; i--) {
+      if (String(msRows[i][1] || '').trim() === projectId) {
+        milestones.push({
+          timestamp: String(msRows[i][0] || ''),
+          childName: String(msRows[i][2] || ''),
+          title: String(msRows[i][3] || ''),
+          metrics: String(msRows[i][4] || ''),
+          note: String(msRows[i][5] || ''),
+          mediaUrl: String(msRows[i][6] || '')
+        });
+      }
+    }
+
+    return jsonResponse({
+      ok: true,
+      scriptVersion: 'V29',
+      projectId: projectId,
+      remoteTier: remoteTier,
+      broadcast: broadcast,
+      guestbook: guestbook,
+      leaderboard: leaderboard.slice(0, 20),
+      milestones: milestones
+    });
+  }
+
+  // --- 4. AUTO-BACKUP & RESTORE PROGRES PINDAH HP 1-KLIK ---
+  if (action === 'backup_progress') {
+    try {
+      const folder = getOrCreateClientFolder(projectId, '');
+      const backupFileName = 'wypha-cloud-backup-' + projectId.replace(/[^a-zA-Z0-9_-]+/g, '-') + '.json';
+      const payloadStr = typeof body.backupData === 'string' ? body.backupData : JSON.stringify(body.backupData || {});
+      const existing = folder.getFilesByName(backupFileName);
+      let file = null;
+      if (existing.hasNext()) {
+        file = existing.next();
+        file.setContent(payloadStr);
+      } else {
+        file = folder.createFile(backupFileName, payloadStr, MimeType.PLAIN_TEXT);
+      }
+      return jsonResponse({
+        ok: true,
+        projectId: projectId,
+        fileId: file.getId(),
+        savedAt: nowStr,
+        message: 'Progres berhasil dicadangkan ke Google Drive (' + backupFileName + ')!'
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  if (action === 'restore_progress') {
+    try {
+      const folder = getOrCreateClientFolder(projectId, '');
+      const backupFileName = 'wypha-cloud-backup-' + projectId.replace(/[^a-zA-Z0-9_-]+/g, '-') + '.json';
+      const existing = folder.getFilesByName(backupFileName);
+      if (!existing.hasNext()) {
+        return jsonResponse({ ok: false, error: 'NO_BACKUP_FOUND', message: 'Belum ada cadangan progres di Google Drive untuk proyek ini.' });
+      }
+      const file = existing.next();
+      const rawJson = file.getBlob().getDataAsString('UTF-8');
+      return jsonResponse({
+        ok: true,
+        projectId: projectId,
+        backupData: JSON.parse(rawJson),
+        updatedAt: Utilities.formatDate(file.getLastUpdated(), Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss')
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  // --- 5. DINDING DOA & BUKU TAMU KELUARGA LIVE (GUESTBOOK) ---
+  if (action === 'post_guestbook') {
+    const sender = String(body.sender || 'Keluarga Tercinta').trim().slice(0, 80);
+    const relation = String(body.relation || 'Kerabat').trim().slice(0, 60);
+    const message = String(body.message || '').trim().slice(0, 500);
+    const emoji = String(body.emoji || '🤲').trim().slice(0, 10);
+    if (!message) return jsonResponse({ ok: false, error: 'EMPTY_MESSAGE', message: 'Tulis ucapan atau doa terlebih dahulu.' });
+    const gbSheet = getOrCreateGuestbookSheet();
+    gbSheet.appendRow([nowStr, projectId, sender, relation, message, emoji, 'TAMPIL']);
+    return jsonResponse({
+      ok: true,
+      entry: { timestamp: nowStr, sender: sender, relation: relation, message: message, emoji: emoji }
+    });
+  }
+
+  // --- 6. KIRIM E-RAPORT OTOMATIS KE EMAIL ORANG TUA (MAILAPP) ---
+  if (action === 'send_eraport_email') {
+    try {
+      const parentEmail = String(body.parentEmail || '').trim();
+      if (!parentEmail || parentEmail.indexOf('@') === -1) {
+        return jsonResponse({ ok: false, error: 'INVALID_EMAIL', message: 'Alamat email orang tua tidak valid.' });
+      }
+      const childName = String(body.childName || 'Ananda Tercinta').trim();
+      const totalStars = Number(body.totalStars) || 0;
+      const badgesCount = Number(body.badgesCount) || 0;
+      const avgScore = body.avgScore !== null && body.avgScore !== undefined ? body.avgScore : '—';
+      const doneChapters = Number(body.doneChapters) || 0;
+      const totalBooks = Number(body.totalBooks) || 0;
+      const parentNote = String(body.parentNote || 'Terus semangat belajar dan mengaji setiap hari!').trim();
+      const topGamesSummary = String(body.topGamesSummary || '45 Game Edukasi & Mengaji Interaktif').trim();
+
+      const subject = '📊 Laporan E-Raport & Capaian Belajar ' + childName + ' — WYPHA Smart E-Book & 45 Edu-Games';
+      const htmlBody =
+        '<div style="font-family:system-ui,-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:24px;border-radius:18px;background:#071326;color:#f0f9ff;border:2px solid #00d2ff">' +
+          '<h2 style="margin:0 0 6px;color:#ffd460">👑 Laporan Perkembangan Belajar & Mengaji Anak</h2>' +
+          '<p style="margin:0 0 16px;color:#9ef6ff;font-size:13px">Dikirim otomatis dari Microsite Pintar WYPHA Studio V29 · ' + nowStr + '</p>' +
+          '<div style="padding:16px;border-radius:14px;background:#0d213f;border:1px solid rgba(110,243,255,.3);margin-bottom:16px">' +
+            '<p style="margin:4px 0">👤 <strong>Nama Anak:</strong> ' + childName + '</p>' +
+            '<p style="margin:4px 0">⭐ <strong>Total Bintang Diraih:</strong> ' + totalStars + ' Bintang</p>' +
+            '<p style="margin:4px 0">🏅 <strong>Lencana Prestasi Terbuka:</strong> ' + badgesCount + ' Lencana</p>' +
+            '<p style="margin:4px 0">📊 <strong>Nilai Rata-rata Evaluasi Game:</strong> ' + avgScore + ' / 100</p>' +
+            '<p style="margin:4px 0">📘 <strong>Progres Perpustakaan 3D:</strong> ' + doneChapters + ' Bab Selesai (' + totalBooks + ' E-Book)</p>' +
+          '</div>' +
+          '<div style="padding:14px;border-radius:12px;background:rgba(16,185,129,.15);border:1px solid #34d399;margin-bottom:14px">' +
+            '<strong style="color:#6ee7b7;display:block;margin-bottom:4px">🎮 Rincian Aktivitas Game Terakhir:</strong>' +
+            '<div style="font-size:13px;color:#d1fae5;white-space:pre-line">' + topGamesSummary + '</div>' +
+          '</div>' +
+          '<div style="padding:14px;border-radius:12px;background:rgba(245,158,11,.15);border:1px solid #fbbf24">' +
+            '<strong style="color:#fde68a;display:block;margin-bottom:4px">💌 Catatan & Apresiasi Orang Tua:</strong>' +
+            '<div style="font-size:13px;color:#fef3c7">' + parentNote + '</div>' +
+          '</div>' +
+        '</div>';
+
+      MailApp.sendEmail({
+        to: parentEmail,
+        subject: subject,
+        htmlBody: htmlBody
+      });
+      return jsonResponse({
+        ok: true,
+        sentTo: parentEmail,
+        sentAt: nowStr,
+        message: 'Laporan E-Raport ' + childName + ' berhasil dikirim ke email ' + parentEmail + '!'
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  // --- 7. PAPAN PERINGKAT BINTANG KOMUNITAS / SEKOLAH (LEADERBOARD) ---
+  if (action === 'submit_leaderboard') {
+    const lbSheet = getOrCreateLeaderboardSheet();
+    const childName = String(body.childName || 'Sobat Wypha').trim().slice(0, 60);
+    const totalStars = Number(body.totalStars) || 0;
+    const badgesCount = Number(body.badgesCount) || 0;
+    const avgScore = Number(body.avgScore) || 0;
+    const lastGame = String(body.lastGame || '45 Edu-Games').trim().slice(0, 80);
+
+    const rows = lbSheet.getDataRange().getValues();
+    let foundRow = -1;
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0] || '').trim() === projectId && String(rows[i][1] || '').trim().toLowerCase() === childName.toLowerCase()) {
+        foundRow = i + 1;
+        break;
+      }
+    }
+    if (foundRow > 0) {
+      lbSheet.getRange(foundRow, 3, 1, 5).setValues([[totalStars, badgesCount, avgScore, lastGame, nowStr]]);
+    } else {
+      lbSheet.appendRow([projectId, childName, totalStars, badgesCount, avgScore, lastGame, nowStr]);
+    }
+    return handleRequest({ action: 'sync_hub', projectId: projectId });
+  }
+
+  // --- 8. REKAMAN SUARA ANAK & JURNAL TUMBUH KEMBANG CLOUD DRIVE ---
+  if (action === 'upload_voice_or_milestone') {
+    try {
+      const childName = String(body.childName || 'Sobat Wypha').trim().slice(0, 80);
+      const title = String(body.title || 'Momen Tumbuh Kembang & Mengaji').trim().slice(0, 120);
+      const metrics = String(body.metrics || '').trim().slice(0, 100);
+      const note = String(body.note || '').trim().slice(0, 500);
+      let mediaUrl = '';
+      let fileId = '';
+
+      if (body.audioDataUrl && String(body.audioDataUrl).indexOf('base64,') !== -1) {
+        const parts = String(body.audioDataUrl).split('base64,');
+        const mime = (parts[0].match(/data:([^;]+)/) || [null, 'audio/webm'])[1];
+        const ext = mime.indexOf('mp4') !== -1 ? '.m4a' : (mime.indexOf('mpeg') !== -1 ? '.mp3' : '.webm');
+        const bytes = Utilities.base64Decode(parts[1]);
+        const folder = getOrCreateClientFolder(projectId, '');
+        const fName = 'rekaman-' + new Date().getTime() + ext;
+        const file = folder.createFile(Utilities.newBlob(bytes, mime, fName));
+        try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+        fileId = file.getId();
+        mediaUrl = 'https://drive.google.com/uc?export=download&id=' + fileId;
+      }
+
+      const msSheet = getOrCreateMilestonesSheet();
+      msSheet.appendRow([nowStr, projectId, childName, title, metrics, note, mediaUrl, fileId]);
+      return jsonResponse({
+        ok: true,
+        entry: { timestamp: nowStr, childName: childName, title: title, metrics: metrics, note: note, mediaUrl: mediaUrl }
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  // --- 9. KLAIM KUNCI MAKSIMAL 2 PERANGKAT + REMOTE TIER SYNC ---
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = getOrCreateLockSheet();
+    const customerName = String(body.customerName || '').trim();
+    const deviceId = String(body.deviceId || '').trim().toUpperCase();
+    const defaultTier = String(body.defaultRemoteTier || '').trim();
+
+    const data = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+    const targetProj = projectId.toLowerCase();
+    for (let i = data.length - 1; i >= 1; i--) {
+      if (String(data[i][0] || '').trim().toLowerCase() === targetProj) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (action === 'reset') {
+      if (rowIndex > 0) {
+        sheet.getRange(rowIndex, 3, 1, 3).setValues([['', '', 0]]);
+        sheet.getRange(rowIndex, 7).setValue(nowStr);
+        sheet.getRange(rowIndex, 9).setValue('');
+      }
+      return jsonResponse({ ok: true, status: 'RESET_SUCCESS', projectId: projectId, maxDevices: MAX_DEVICES, usedSlots: 0, ownerDeviceIds: [] });
+    }
+
+    if (!deviceId) {
+      return jsonResponse({ ok: false, reason: 'MISSING_DEVICE_ID', remoteTier: readRemoteTierForProject(projectId, defaultTier) });
+    }
+
+    if (rowIndex === -1) {
+      sheet.appendRow([projectId, customerName || projectId, deviceId, '', 1, nowStr, nowStr, 1, '', defaultTier]);
+      return jsonResponse({
+        ok: true,
+        scriptVersion: 'V29',
+        status: 'CLAIMED_SLOT_1_OF_2',
+        slot: 1,
+        maxDevices: MAX_DEVICES,
+        usedSlots: 1,
+        ownerDeviceIds: [deviceId],
+        ownerDeviceId: deviceId,
+        remoteTier: defaultTier
+      });
+    }
+
+    const rowVals = sheet.getRange(rowIndex, 1, 1, 10).getValues()[0];
+    const resetCmd = String(rowVals[8] || '').trim().toUpperCase();
+    let remoteTierVal = String(rowVals[9] || '').trim();
+    if (!remoteTierVal && defaultTier) {
+      remoteTierVal = defaultTier;
+      sheet.getRange(rowIndex, 10).setValue(defaultTier);
+    }
+    let dev1 = String(rowVals[2] || '').trim().toUpperCase();
+    let dev2 = String(rowVals[3] || '').trim().toUpperCase();
+
+    if (resetCmd === 'RESET' || resetCmd === 'YA' || resetCmd === '1') {
+      dev1 = '';
+      dev2 = '';
+      sheet.getRange(rowIndex, 9).setValue('');
+    }
+
+    const owners = [dev1, dev2].filter(Boolean);
+    const visits = (Number(rowVals[7]) || 0) + 1;
+    if (customerName && !String(rowVals[1] || '').trim()) {
+      sheet.getRange(rowIndex, 2).setValue(customerName);
+    }
+
+    if (owners.indexOf(deviceId) !== -1) {
+      sheet.getRange(rowIndex, 7, 1, 2).setValues([[nowStr, visits]]);
+      return jsonResponse({
+        ok: true,
+        scriptVersion: 'V29',
+        status: 'VERIFIED_OWNER_DEVICE',
+        slot: owners.indexOf(deviceId) + 1,
+        maxDevices: MAX_DEVICES,
+        usedSlots: owners.length,
+        ownerDeviceIds: owners,
+        ownerDeviceId: owners.join(' | '),
+        remoteTier: remoteTierVal
+      });
+    }
+
+    if (owners.length < MAX_DEVICES) {
+      owners.push(deviceId);
+      sheet.getRange(rowIndex, 3, 1, 3).setValues([[owners[0] || '', owners[1] || '', owners.length]]);
+      sheet.getRange(rowIndex, 7, 1, 2).setValues([[nowStr, visits]]);
+      return jsonResponse({
+        ok: true,
+        scriptVersion: 'V29',
+        status: owners.length === 1 ? 'CLAIMED_SLOT_1_OF_2' : 'CLAIMED_SLOT_2_OF_2',
+        slot: owners.length,
+        maxDevices: MAX_DEVICES,
+        usedSlots: owners.length,
+        ownerDeviceIds: owners,
+        ownerDeviceId: owners.join(' | '),
+        remoteTier: remoteTierVal
+      });
+    }
+
+    return jsonResponse({
+      ok: false,
+      scriptVersion: 'V29',
+      status: 'REJECTED_MAX_2_DEVICES',
+      reason: 'MAX_2_DEVICES_ALREADY_CLAIMED',
+      maxDevices: MAX_DEVICES,
+      usedSlots: owners.length,
+      ownerDeviceIds: owners,
+      ownerDeviceId: owners.join(' | '),
+      remoteTier: remoteTierVal
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}

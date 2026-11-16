@@ -1,0 +1,44 @@
+{
+  "id": "./",
+  "name": "WYPHA Magic QR Studio V28 — Perpustakaan Virtual 3D, 19 Edu-Game Arena & Personal Diary",
+  "short_name": "WYPHA V28",
+  "description": "WYPHA Studio & Perpustakaan Virtual 3D V28: 7 Preset E-Book Eksklusif, 19 Wahana Edu-Game & Mengaji, Personal Diary OS, dan Kunci Lisensi 1-Perangkat.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "background_color": "#07101b",
+  "theme_color": "#07101b",
+  "lang": "id-ID",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
