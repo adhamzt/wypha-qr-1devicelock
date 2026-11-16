@@ -1,0 +1,34 @@
+================================================================================
+🌟 PANDUAN LENGKAP WYPHA STUDIO V31 (ALL-IN-ONE CLOUDFLARE EDITION) 🌟
+================================================================================
+
+Apa yang Baru & Diperbaiki di Versi V31:
+1. PERBAIKAN TOTAL LOGO WYPHA PRINTLAB (100% JERNIH DI SEMUA BAGIAN):
+   - Seluruh aset gambar dan logo Wypha PrintLab di Topbar Studio, Opening Gate,
+     Hero Microsite, Kartu Souvenir Collector Pass, Sticker Lab, dan Footer
+     telah dipulihkan utuh 100% dan dilengkapi sistem Auto-Heal apabila ada
+     proyek lama yang sebelumnya tersimpan dengan logo rusak.
+
+2. SAKLAR ON/OFF GAME MURNI HANYA DI STUDIO (DIHAPUS DARI MICROSITE CUSTOMER):
+   - Panel saklar ON/OFF per game kini hanya berada di dalam aplikasi WYPHA Studio
+     (sebelum di-export atau disinkronkan), sehingga customer di microsite tidak
+     melihat atau mengubah saklar ON/OFF game.
+
+3. PERBAIKAN IMPORT PAKET SOAL AI (.ZIP) — TERMASUK "Paket-Soal-Wypha-V30.zip":
+   - Mesin pembaca .ZIP & JSON kini mendukung penuh tanda kutip lengkung (“...”)
+     di dalam kalimat soal Bahasa Indonesia tanpa memicu error atau pesan palsu
+     "Paket game/soal ini sudah terinstal sebelumnya".
+   - Game Ejaan Kata & Fonik ("word_phonics") dan Matematika ("math_rocket")
+     kini mendukung penggabungan (merge) soal Pilihan Ganda ("mode": "choice")
+     dari AI sekaligus soal susun huruf bawaan.
+
+4. PEMISAHAN TOTAL PERPUSTAKAAN E-BOOK 3D & WAHANA EDU-GAME 3D (MASING-MASING
+   DENGAN RUNNING TEXT LED MENYALA & E-RAPORT SENDIRI-SENDIRI):
+   - Bagian 1 (Atas): 📚 WYPHA PERPUSTAKAAN VIRTUAL 3D (Khusus koleksi E-Book PDF
+     & Interaktif, 20 Tema Baca Eye-Care, serta E-Raport & Sertifikat PNG Khusus
+     Literasi E-Book).
+   - Bagian 2 (Tepat di Bawah Perpustakaan): 🎮 WYPHA WAHANA EDU-GAME & MENGAJI 3D
+     (Dilengkapi layar pembuka Running Text LED menyala bergaya futuristik,
+     daftar game aktif sesuai paket, serta E-Raport & Sertifikat PNG Khusus
+     Wahana Edu-Game).
+================================================================================
