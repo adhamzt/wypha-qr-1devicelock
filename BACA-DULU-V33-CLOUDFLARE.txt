@@ -1,0 +1,27 @@
+================================================================================
+🌟 PANDUAN LENGKAP WYPHA STUDIO V33 (ALL-IN-ONE CLOUDFLARE EDITION) 🌟
+================================================================================
+
+Apa yang Baru & Diperbaiki di Versi V33:
+1. PERPUSTAKAAN VIRTUAL 3D MURNI 100% KHUSUS LITERASI E-BOOK:
+   - Tombol pintas "Arena 5 Game Edukasi" di dalam bagian Perpustakaan telah
+     dihapus sepenuhnya.
+   - Seluruh isi, kontrol, petunjuk/tutorial, dan E-Raport di dalam bagian
+     Perpustakaan kini 100% murni membahas koleksi E-Book PDF/Interaktif,
+     20 Tema Baca Eye-Care, Checklist Bab, dan E-Raport Literasi.
+
+2. TOMBOL COPY PROMPT AI MURNI HANYA DI STUDIO (DIHAPUS DARI MICROSITE CUSTOMER):
+   - Di bagian Wahana Edu-Game pada microsite customer, tombol "Copy Prompt AI"
+     dan kotak generator teks AI telah dihapus sehingga customer cukup memilih
+     dan mengimpor file .ZIP paket soal.
+   - Fitur "Copy Prompt AI Pembuat Paket Soal (.ZIP)" tetap tersedia khusus bagi
+     kreator/admin di dalam aplikasi WYPHA Studio.
+
+3. EKSPANSI 4.500+ BANK SOAL (100+ SOAL RELEVAN PER GAME DI SELURUH 45 GAME)
+   & 20 SOAL ACAK (RANDOM) SETIAP SESI PERMAINAN:
+   - Setiap game dari total 45 Game kini memiliki minimal >100 soal/tantangan
+     unik yang relevan penuh dengan judul dan mata pelajaran gamenya.
+   - Setiap sesi permainan kini menampilkan 20 Soal (bukan lagi 5 soal), dan
+     diacak secara otomatis (Fisher-Yates Cryptographic Shuffle) setiap kali
+     memulai game sehingga anak selalu mendapatkan kombinasi soal baru.
+================================================================================
