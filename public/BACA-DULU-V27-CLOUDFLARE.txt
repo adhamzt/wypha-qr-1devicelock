@@ -1,0 +1,17 @@
+=================================================================
+WYPHA-PRINTLAB QR FANTASY STUDIO · V27 (35 EDU-GAMES, PER-GAME ON/OFF & .ZIP DLC EDITION)
+=================================================================
+
+PEMBARUAN V27 (35 EDU-GAMES + SAKLAR ON/OFF PER GAME + EKSPOR/IMPOR PAKET GAME .ZIP):
+1. Penambahan 16 Game Edukasi Baru (Total 45 Game Interaktif di Dalam Studio):
+   - Matematika & Koding (8 Game): Math Rocket, Clock Master, Code-Bot Maze, Logika Pola, Kasir Cilik & Pecahan Rupiah, Master Pecahan & Pizza Visual, Tangram & Simetri, Detektif Logika & Sudoku Anak.
+   - IPA & Sains (5 Game): Lab Sains Cilik, Memory Match Sains, Penjelajah Tubuh & Panca Indra, Dokter Gizi & Isi Piringku, Cuaca & Siaga Bencana.
+   - IPS & Karakter (6 Game): Jelajah Nusantara & Dunia, Pahlawan Bumi & Adab, Celengan Cilik, Duta Pancasila & Lambang Garuda, Polisi Cilik & Rambu Lalu Lintas, Detektif Emosi & Empati Sosial.
+   - Bahasa & Seni (6 Game): Word & Phonics, Susun Kalimat & Antonim, Piano Nada & Memori Suara, Susun Suku Kata & Lancar Baca, Percakapan Inggris Harian, Studio Campur Warna & Seni Budaya.
+   - Mengaji & PAI (10 Game): Huruf Hijaiyah & Harakat, Puzzle Sambung Huruf Arab, Detektif Tajwid, Susun Ayat Juz Amma, Doa Harian, Angka Arab & Kalender Hijriah, Jejak Nabi & Rukun Islam, Taman 99 Asmaul Husna, Petualangan Adab & Akhlak Rasulullah, Kisah Teladan Al-Qur’an & Sahabat Nabi.
+2. Saklar ON/OFF Per Game & Preset Paket Jualan di Studio:
+   - Buka Menu 13 -> Perpustakaan Virtual 3D -> panel "🎛️ V27 · Saklar ON/OFF Per Game (45 Game) & Preset Paket Pesanan".
+   - Tersedia tombol cepat: Paket Basic (5 Game), Paket Standar (12 Game), Paket Mengaji (12 Game), Paket STEM (15 Game), Paket Lengkap (45 Game), atau Kosongkan Semua (0 Game), serta centang manual per game.
+3. Generator Paket Jualan Game (.ZIP DLC) di Studio & Impor .ZIP di Microsite Customer:
+   - Di Studio: Pilih game yang ingin dijual sebagai add-on lalu klik "📦 Download Paket Game Tambahan (.ZIP) Siap Kirim ke Customer".
+   - Di Microsite Customer: Klik tombol "📦 ＋ Impor Paket Game Tambahan (.ZIP / .JSON)" di Arena Edu-Game, pilih file .ZIP, dan game tambahan langsung terbuka serta tersimpan permanen di perangkat customer!
