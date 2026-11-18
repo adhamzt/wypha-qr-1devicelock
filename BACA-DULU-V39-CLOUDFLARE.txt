@@ -1,0 +1,16 @@
+========================================================================
+PANDUAN CEPAT WYPHA STUDIO V39 (CLOUDFLARE & GOOGLE SITES READY)
+========================================================================
+Pembaruan di Versi V39:
+1. Modul Baru: Wahana Belajar & Flashcard Interaktif 3D (#wyphaInteractiveLearnSection)
+   - Posisi berada di tengah: tepat di bawah Perpustakaan Virtual 3D dan di atas Wahana Edu-Game 3D.
+   - Menyajikan 12 Pelajaran Flashcard Visual & Fonik (Mengenal Huruf Abjad A-Z + Gambar Benda Besar di Sampingnya, Membaca Suku Kata Ba-Bi-Bu-Be-Bo, Mengenal Angka 1-20 & Hitung Benda Sentuh Interaktif, Hewan & Suara, Buah & Sayur, Warna & Bentuk, Anggota Tubuh, Transportasi & Profesi, Kids Daily English, Tata Surya & Sains, 29 Huruf Hijaiyah Alif-Ya, dan Doa/Adab Harian).
+   - Dilengkapi fitur Ketuk Kartu Langsung Bersuara (Touch-to-Speak ID/EN), Mode Putar Otomatis (Auto-Play), Kanvas Latihan Tulis di Kartu, dan Tandai Sudah Hafal (+1 Bintang Permanen).
+   - Infrastruktur lengkap di Studio: Saklar Master ON/OFF, Saklar ON/OFF per pelajaran, 6 Preset Paket (termasuk Paket Non-PAI), Remote Lock dari Google Sheets, Tambah Pelajaran Kustom, serta Generator & Import Paket Pelajaran (.ZIP DLC).
+2. Paket Penuh Ultimate Tanpa PAI / Non-Muslim di Edu-Game (UMUM_NON_PAI_33):
+   - Mengaktifkan penuh 33 Game Umum (Matematika, Koding, IPA/Sains, IPS/Pancasila, Bahasa, Musik & Seni) dan mematikan 12 game Mengaji/PAI serta otomatis menyembunyikan tab filter Mengaji & PAI untuk customer Non-Muslim.
+3. Auto-Sync Silsilah Keluarga ke Pengunjung (Live Cloud Lineage Sync):
+   - Setiap perubahan Silsilah Keluarga yang disimpan customer (saat PIN terbuka) otomatis disinkronkan ke Google Cloud lewat URL Google Apps Script All-in-One yang sudah ada, sehingga saudara atau pengunjung lain yang membuka microsite langsung melihat editan silsilah terakhir dalam mode baca.
+4. Revisi Dinding Doa & Buku Tamu Keluarga:
+   - Kalimat lebih singkat, rapi, dan elegan (tanpa menyebut "panel elegan"), tampilan lebih ringkas dan minim emoji, serta tombol CTA "Tulis Doa & Ucapan" berkedip halus untuk menarik perhatian pengunjung.
+========================================================================
