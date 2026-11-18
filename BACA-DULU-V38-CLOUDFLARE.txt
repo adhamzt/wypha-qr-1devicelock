@@ -1,0 +1,12 @@
+========================================================================
+PANDUAN CEPAT WYPHA STUDIO V38 (CLOUDFLARE & GOOGLE SITES READY)
+========================================================================
+Pembaruan di Versi V38:
+1. Perbaikan Paket Game Default Studio Saat Buka Kunci PIN Customer:
+   - Memperbaiki sinkronisasi antara Studio, hasil ekspor microsite (`v13Output` & `v14Output`), dan verifikasi buka kunci PIN (`verifyCloudSingleDeviceClaim`) sehingga paket game yang ditentukan di Studio (seperti `STANDAR_12`, `INTERAKTIF_15`, `QURAN_12`, `STEM_15`, `ULTIMATE_45`, `BASIC_5`, atau pilihan saklar manual) langsung tampil sesuai jumlahnya saat customer pertama kali membuka kunci PIN (tidak lagi kembali ke `BASIC_5`).
+   - Menyelaraskan dropdown Paket Game Default (`#v27RemoteDefaultTierSelect`) dan 45 Saklar ON/OFF Game (`#v25GameSelectorCard`) di Studio sebelum proses `v126Capture()` agar pilihan paket tidak tertimpa nilai lama.
+   - Memastikan sinkronisasi awal ke Kolom J Google Sheets (`WyphaDeviceLocks`) otomatis menyesuaikan paket baru saat microsite diekspor, sambil tetap menjaga fitur Remote Lock/Open Game secara live dari Kolom J Google Sheets (`BASIC_5` <-> `STANDAR_12` <-> `ULTIMATE_45`).
+2. Pertahanan Penuh Fitur V37 (Non-Regression):
+   - Import e-book interaktif `.json` langsung bisa dibuka tanpa refresh, ditutup, dan dibuka kembali dengan lancar.
+   - Panel pengaturan atas & Daftar Isi di Ruang Baca E-Book terlipat rapi secara default.
+========================================================================
