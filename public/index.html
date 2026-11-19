@@ -34434,7 +34434,7 @@ function v142CustomerRuntime(C) {
         state.eduGames = def;
       }
       if (!['level1', 'level2', 'level3'].includes(state.eduGames.ageLevel)) state.eduGames.ageLevel = def.ageLevel;
-      if (!EDU_GAME_SUBJECT_TABS.some(t => t.id === state.eduGames.subjectFilter)) state.eduGames.subjectFilter = 'all';
+      if (!state.eduGames.subjectFilter) state.eduGames.subjectFilter = 'all';
       if (typeof state.eduGames.autoSpeak !== 'boolean') state.eduGames.autoSpeak = def.autoSpeak;
       if (typeof state.eduGames.sfxEnabled !== 'boolean') state.eduGames.sfxEnabled = true;
       if (state.eduGames.screenLimitMin === undefined) state.eduGames.screenLimitMin = def.screenLimitMin;
@@ -38731,26 +38731,40 @@ function v142CustomerRuntime(C) {
       incomingCustomGames.forEach(cg => {
         if (!cg || typeof cg !== 'object' || !cg.id) return;
         const cleanId = String(cg.id).trim();
-        if (!eg.importedCustomGames.some(x => x.id === cleanId) && !EDU_GAMES_CATALOG.some(x => x.id === cleanId)) {
-          eg.importedCustomGames.push({
-            id: cleanId,
-            subjectTab: ['math_coding', 'science', 'social_char', 'lang_art', 'mengaji_pai'].includes(cg.subjectTab) ? cg.subjectTab : 'science',
-            icon: cg.icon || '🎮',
-            badgeIcon: cg.badgeIcon || '🏅',
-            color: cg.color || '#38bdf8',
-            titleId: cg.titleId || cg.title || cleanId,
-            titleEn: cg.titleEn || cg.titleId || cg.title || cleanId,
-            focusId: cg.focusId || 'Edu-Game Tambahan (DLC)',
-            focusEn: cg.focusEn || cg.focusId || 'Bonus Edu-Game (DLC)',
-            badgeNameId: cg.badgeNameId || ('Bintang ' + (cg.titleId || cleanId)),
-            badgeNameEn: cg.badgeNameEn || ('Star of ' + (cg.titleEn || cleanId)),
-            benefitId: cg.benefitId || 'Melatih pemahaman dan ketangkasan berpikir anak melalui permainan interaktif.',
-            benefitEn: cg.benefitEn || 'Trains children through interactive educational gameplay.'
-          });
+        const existingIdx = eg.importedCustomGames.findIndex(x => x.id === cleanId);
+        const cleanSubjTab = String(cg.subjectTab || 'science').trim() || 'science';
+        const gameDef = {
+          id: cleanId,
+          subjectTab: cleanSubjTab,
+          subjectLabelId: String(cg.subjectLabelId || '').trim(),
+          subjectLabelEn: String(cg.subjectLabelEn || cg.subjectLabelId || '').trim(),
+          subjectIcon: String(cg.subjectIcon || '').trim(),
+          engineType: String(cg.engineType || 'quiz_mcq').trim(),
+          pluginHtml: typeof cg.pluginHtml === 'string' ? cg.pluginHtml : '',
+          icon: cg.icon || '🎮',
+          badgeIcon: cg.badgeIcon || '🏅',
+          color: cg.color || '#38bdf8',
+          titleId: cg.titleId || cg.title || cleanId,
+          titleEn: cg.titleEn || cg.titleId || cg.title || cleanId,
+          focusId: cg.focusId || 'Edu-Game Tambahan (DLC)',
+          focusEn: cg.focusEn || cg.focusId || 'Bonus Edu-Game (DLC)',
+          badgeNameId: cg.badgeNameId || ('Bintang ' + (cg.titleId || cleanId)),
+          badgeNameEn: cg.badgeNameEn || ('Star of ' + (cg.titleEn || cleanId)),
+          benefitId: cg.benefitId || 'Melatih pemahaman dan ketangkasan berpikir anak melalui permainan interaktif.',
+          benefitEn: cg.benefitEn || 'Trains children through interactive educational gameplay.'
+        };
+        if (existingIdx >= 0) {
+          eg.importedCustomGames[existingIdx] = { ...eg.importedCustomGames[existingIdx], ...gameDef };
+        } else if (!EDU_GAMES_CATALOG.some(x => x.id === cleanId)) {
+          eg.importedCustomGames.push(gameDef);
         }
         if (!eg.unlockedGameIds.includes(cleanId)) {
           eg.unlockedGameIds.push(cleanId);
           unlockedGamesCount++;
+        }
+        if (!Array.isArray(eg.zipUnlockedGameIds)) eg.zipUnlockedGameIds = [];
+        if (!eg.zipUnlockedGameIds.includes(cleanId)) {
+          eg.zipUnlockedGameIds.push(cleanId);
         }
       });
 
@@ -38777,12 +38791,22 @@ function v142CustomerRuntime(C) {
         if (!rawQ || typeof rawQ !== 'object') return;
         const gid = validGameIds.has(rawQ.gameId) ? rawQ.gameId : 'science_lab';
         const lvl = ['level1', 'level2', 'level3', 'all'].includes(rawQ.level) ? rawQ.level : 'all';
-        const promptId = String(rawQ.promptId || rawQ.question || rawQ.clueId || '').trim();
+        const engineType = String(rawQ.engineType || '').trim();
+        const promptId = String(rawQ.promptId || rawQ.question || rawQ.clueId || rawQ.labelId || rawQ.itemTitleId || '').trim();
         const ansId = String(rawQ.ansId || rawQ.answer || '').trim();
         const choicesId = Array.isArray(rawQ.choicesId || rawQ.choices) ? (rawQ.choicesId || rawQ.choices).map(String) : [];
 
-        if (!promptId && !rawQ.wordId && !Array.isArray(rawQ.wordsId)) return;
-        const sig = `${gid}|${(promptId || rawQ.wordId || (rawQ.wordsId || []).join(' ')).toLowerCase()}`;
+        const hasInteractivePayload = Boolean(
+          rawQ.targetWeight !== undefined ||
+          rawQ.targetHour !== undefined ||
+          rawQ.targetRp !== undefined ||
+          (Array.isArray(rawQ.steps) && rawQ.steps.length) ||
+          (Array.isArray(rawQ.pairs) && rawQ.pairs.length) ||
+          rawQ.pluginHtml
+        );
+        if (!promptId && !rawQ.wordId && !Array.isArray(rawQ.wordsId) && !hasInteractivePayload) return;
+        const sigKey = promptId || rawQ.wordId || (rawQ.wordsId || []).join(' ') || `${engineType}:${rawQ.targetWeight || ''}:${rawQ.targetHour || ''}:${rawQ.targetMinute || ''}:${rawQ.targetRp || ''}:${(rawQ.steps || []).length}:${(rawQ.pairs || []).length}:${idx}`;
+        const sig = `${gid}|${String(sigKey).toLowerCase()}`;
         if (existingSigs.has(sig)) return;
 
         existingSigs.add(sig);
@@ -38790,10 +38814,12 @@ function v142CustomerRuntime(C) {
         addedCount++;
 
         eg.customQuestions.push({
+          ...rawQ,
           id: rawQ.id || `${packId}-q${idx + 1}-${Date.now()}`,
           packId,
           gameId: gid,
           level: lvl,
+          engineType: engineType || undefined,
           mode: rawQ.mode || (Array.isArray(rawQ.wordsId) ? 'sentence' : 'choice'),
           arabicText: String(rawQ.arabicText || ''),
           arabicSpeak: String(rawQ.arabicSpeak || rawQ.arabicText || ''),
@@ -41591,7 +41617,7 @@ function v142CustomerRuntime(C) {
           questions: pickFreshEduQuestions(gid, lvl, pool, SESSION_COUNT)
         };
       } else if (eg.activeGameId === 'balance_scale') {
-        const raw = V26_BALANCE_SCALE_CHALLENGES[lvl] || V26_BALANCE_SCALE_CHALLENGES.level1;
+        const raw = [...getCustomQuestionsForGame('balance_scale', lvl).filter(x => x.targetWeight !== undefined || x.targetLeft !== undefined), ...(V26_BALANCE_SCALE_CHALLENGES[lvl] || V26_BALANCE_SCALE_CHALLENGES.level1)];
         const picked = pickFreshEduQuestions('balance_scale', lvl, raw, SESSION_COUNT);
         const questions = picked.map(q => {
           const tw = Number(q.targetWeight ?? q.targetLeft ?? 15);
@@ -41611,7 +41637,8 @@ function v142CustomerRuntime(C) {
         egSession = { gameId: 'balance_scale', qIdx: 0, score: 0, streak: 0, hintShown: false, answered: false, feedbackMsg: '', isFinished: false, questions };
       } else if (eg.activeGameId === 'interactive_clock') {
         const pad2 = n => String(n).padStart(2, '0');
-        const picked = pickFreshEduQuestions('interactive_clock', lvl, V26_INTERACTIVE_CLOCK_CHALLENGES, SESSION_COUNT);
+        const customClk = getCustomQuestionsForGame('interactive_clock', lvl).filter(x => x.targetHour !== undefined);
+        const picked = pickFreshEduQuestions('interactive_clock', lvl, [...customClk, ...V26_INTERACTIVE_CLOCK_CHALLENGES], SESSION_COUNT);
         const questions = picked.map(q => {
           const th = Number(q.targetHour ?? 7);
           const tm = Number(q.targetMinute ?? 0);
@@ -41629,7 +41656,8 @@ function v142CustomerRuntime(C) {
         });
         egSession = { gameId: 'interactive_clock', qIdx: 0, score: 0, streak: 0, hintShown: false, answered: false, feedbackMsg: '', isFinished: false, questions };
       } else if (eg.activeGameId === 'cashier_tray') {
-        const picked = pickFreshEduQuestions('cashier_tray', lvl, V26_CASHIER_TRAY_CHALLENGES, SESSION_COUNT);
+        const customCash = getCustomQuestionsForGame('cashier_tray', lvl).filter(x => x.targetRp !== undefined || x.targetAmount !== undefined);
+        const picked = pickFreshEduQuestions('cashier_tray', lvl, [...customCash, ...V26_CASHIER_TRAY_CHALLENGES], SESSION_COUNT);
         const questions = picked.map(q => {
           const tRp = Number(q.targetRp ?? q.targetAmount ?? 15000);
           return {
@@ -41737,19 +41765,161 @@ function v142CustomerRuntime(C) {
         };
       } else {
         const gid = eg.activeGameId || 'kids_finance';
-        const rawPool = gid === 'kids_finance' ? [...FINANCE_QUESTIONS, ...EXTRA_FINANCE_QUESTIONS] : (V32_EXPANDED_BANKS[gid] || []);
-        const pool = buildMergedChoicePool(gid, lvl, rawPool);
-        egSession = {
-          gameId: gid,
-          qIdx: 0,
-          score: 0,
-          streak: 0,
-          hintShown: false,
-          answered: false,
-          feedbackMsg: '',
-          isFinished: false,
-          questions: pickFreshEduQuestions(gid, lvl, pool.length ? pool : buildMergedChoicePool('kids_finance', lvl, [...FINANCE_QUESTIONS, ...EXTRA_FINANCE_QUESTIONS]), SESSION_COUNT)
-        };
+        const gMetaObj = getFullEduGamesCatalog().find(x => x.id === gid) || {};
+        const rawCustomForGid = getCustomQuestionsForGame(gid, lvl);
+        const rawBank = gid === 'kids_finance' ? [...FINANCE_QUESTIONS, ...EXTRA_FINANCE_QUESTIONS] : (V32_EXPANDED_BANKS[gid] || []);
+        const detectedEngine = gMetaObj.engineType || (rawCustomForGid[0] && rawCustomForGid[0].engineType) || 'quiz_mcq';
+
+        if (detectedEngine && detectedEngine !== 'quiz_mcq' && (rawCustomForGid.length || gMetaObj.pluginHtml)) {
+          const pad2 = n => String(n).padStart(2, '0');
+          let mappedQuestions = [];
+          if (detectedEngine === 'micro_plugin') {
+            mappedQuestions = [{
+              engineType: 'micro_plugin',
+              pluginHtml: gMetaObj.pluginHtml || rawCustomForGid[0]?.pluginHtml || '',
+              promptId: gMetaObj.titleId || 'Micro-Plugin Edu-Game',
+              promptEn: gMetaObj.titleEn || 'Micro-Plugin Edu-Game'
+            }];
+          } else {
+            const pickedRaw = pickFreshEduQuestions(gid, lvl, rawCustomForGid, SESSION_COUNT);
+            mappedQuestions = pickedRaw.map((q, qIndex) => {
+              const eType = q.engineType || detectedEngine;
+              if (eType === 'balance_scale') {
+                const tw = Number(q.targetWeight ?? q.targetLeft ?? 10);
+                const opts = Array.isArray(q.options) && q.options.length ? q.options : [1, 2, 3, 5, 10, 15, 20];
+                return {
+                  ...q,
+                  engineType: 'balance_scale',
+                  targetWeight: tw,
+                  leftLabel: q.leftLabel || `⚖️ ${tw} kg`,
+                  clueId: q.clueId || q.promptId || `Seimbangkan timbangan agar sisi kanan tepat ${tw} kg!`,
+                  clueEn: q.clueEn || q.promptEn || `Balance the scale so the right pan equals ${tw} kg!`,
+                  options: opts,
+                  placedWeights: []
+                };
+              }
+              if (eType === 'interactive_clock') {
+                const th = Number(q.targetHour ?? 7);
+                const tm = Number(q.targetMinute ?? 0);
+                return {
+                  ...q,
+                  engineType: 'interactive_clock',
+                  targetHour: th,
+                  targetMinute: tm,
+                  labelId: q.labelId || q.promptId || `Pukul ${pad2(th)}:${pad2(tm)}`,
+                  labelEn: q.labelEn || q.promptEn || `Set clock to ${pad2(th)}:${pad2(tm)}`,
+                  hintId: q.hintId || `Arahkan jarum pendek ke ${th} dan jarum panjang ke :${pad2(tm)}!`,
+                  hintEn: q.hintEn || `Point the hour hand to ${th} and minute hand to :${pad2(tm)}!`,
+                  userHour: 12,
+                  userMinute: 0
+                };
+              }
+              if (eType === 'cashier_tray') {
+                const tRp = Number(q.targetRp ?? q.targetAmount ?? 15000);
+                return {
+                  ...q,
+                  engineType: 'cashier_tray',
+                  targetRp: tRp,
+                  itemIcon: q.itemIcon || '🛍️',
+                  itemTitleId: q.itemTitleId || q.promptId || `Belanja Edukasi (Rp${tRp.toLocaleString('id-ID')})`,
+                  itemTitleEn: q.itemTitleEn || q.promptEn || `Item (Rp${tRp.toLocaleString('id-ID')})`,
+                  hintId: q.hintId || `Susun uang hingga tepat Rp${tRp.toLocaleString('id-ID')}!`,
+                  hintEn: q.hintEn || `Match Rp${tRp.toLocaleString('id-ID')}!`,
+                  trayNotes: []
+                };
+              }
+              if (eType === 'drag_sequence') {
+                const steps = Array.isArray(q.steps) ? q.steps : [];
+                return {
+                  ...q,
+                  engineType: 'drag_sequence',
+                  steps,
+                  cards: shuffleArrayV19(steps.map((s, sIdx) => ({
+                    id: s.id || ('st-' + sIdx),
+                    icon: s.icon || '🔹',
+                    textId: s.textId || s.label || String(s),
+                    textEn: s.textEn || s.textId || s.label || String(s),
+                    order: sIdx
+                  }))),
+                  pickedIds: []
+                };
+              }
+              if (eType === 'match_pairs') {
+                const pairs = Array.isArray(q.pairs) ? q.pairs : [];
+                return {
+                  ...q,
+                  engineType: 'match_pairs',
+                  pairs,
+                  rightItems: shuffleArrayV19(pairs.map((p, pIdx) => ({ id: p.id || ('pr-' + pIdx), text: p.right || p.textRight || '' }))),
+                  selectedLeftId: null,
+                  matchedIds: []
+                };
+              }
+              if (eType === 'word_builder') {
+                const targetWord = String(q.wordId || q.ansId || 'WYPHA').trim().toUpperCase();
+                const letters = targetWord.split('').map((ch, cIdx) => ({ ch, id: cIdx, used: false }));
+                for (let i = letters.length - 1; i > 0; i--) {
+                  const j = Math.floor(v32CryptoRandomFloat() * (i + 1));
+                  [letters[i], letters[j]] = [letters[j], letters[i]];
+                }
+                return {
+                  ...q,
+                  engineType: 'word_builder',
+                  icon: q.icon || '🔤',
+                  targetWord,
+                  altWord: q.wordEn || targetWord,
+                  clueId: q.clueId || q.promptId || 'Susun huruf menjadi kata yang tepat',
+                  clueEn: q.clueEn || q.promptEn || 'Arrange letters to spell the word',
+                  letters,
+                  pickedIndices: []
+                };
+              }
+              if (eType === 'memory_flip') {
+                const pairs = Array.isArray(q.pairs) ? q.pairs : [];
+                const deck = [];
+                pairs.forEach((p, pIdx) => {
+                  const pid = p.id || ('mp-' + pIdx);
+                  deck.push({ uid: pid + '-a', pairId: pid, icon: p.icon || '🃏', label: p.left || p.titleId || '', flipped: false, matched: false });
+                  deck.push({ uid: pid + '-b', pairId: pid, icon: p.icon || '🃏', label: p.right || p.left || p.titleEn || '', flipped: false, matched: false });
+                });
+                return {
+                  ...q,
+                  engineType: 'memory_flip',
+                  deck: shuffleArrayV19(deck),
+                  openIndices: [],
+                  matchedCount: 0,
+                  totalPairs: pairs.length
+                };
+              }
+              return buildMergedChoicePool(gid, lvl, [q])[0] || q;
+            });
+          }
+          egSession = {
+            gameId: gid,
+            engineType: detectedEngine,
+            qIdx: 0,
+            score: 0,
+            streak: 0,
+            hintShown: false,
+            answered: false,
+            feedbackMsg: '',
+            isFinished: false,
+            questions: mappedQuestions
+          };
+        } else {
+          const pool = buildMergedChoicePool(gid, lvl, rawBank);
+          egSession = {
+            gameId: gid,
+            qIdx: 0,
+            score: 0,
+            streak: 0,
+            hintShown: false,
+            answered: false,
+            feedbackMsg: '',
+            isFinished: false,
+            questions: pickFreshEduQuestions(gid, lvl, pool.length ? pool : buildMergedChoicePool('kids_finance', lvl, [...FINANCE_QUESTIONS, ...EXTRA_FINANCE_QUESTIONS]), SESSION_COUNT)
+          };
+        }
       }
 
       renderActiveEduGameStage(true);
@@ -43207,6 +43377,357 @@ function v142CustomerRuntime(C) {
         });
         stageEl.querySelector('#v18EgNextQBtn')?.addEventListener('click', () => advanceV33QuestionNow());
         return;
+      }
+
+      // =========================================================================
+      // V41 UNIVERSAL ENGINE REGISTRY RENDERER FOR CUSTOM .ZIP GAMES & QUESTIONS
+      // Ensures custom questions/games render with their native interactive mechanics!
+      // =========================================================================
+      const activeQForReg = Array.isArray(egSession.questions) ? egSession.questions[egSession.qIdx] : null;
+      const regEngineType = activeQForReg?.engineType || egSession.engineType || gMeta.engineType || '';
+      if (regEngineType && regEngineType !== 'quiz_mcq' && activeQForReg) {
+        const totalQ = egSession.questions.length;
+        const pct = Math.round(((egSession.qIdx) / Math.max(1, totalQ)) * 100);
+        const headerBarHtml =
+          `<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px">` +
+            `<div><strong style="font:800 15px Syne,system-ui;color:#fff">${gMeta.icon} ${gTitle}</strong><small style="display:block;font-size:11.5px;color:#9ef6ff">🎯 ${t('Manfaat:', 'Benefit:')} ${gBenefit}</small></div>` +
+            `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="v142-chip">📋 ${t('Misi', 'Mission')} ${egSession.qIdx + 1}/${totalQ}</span><span class="v142-chip score-chip">🪙 Coin: ${egSession.score}/100</span></div>` +
+          `</div>` +
+          `<div style="position:relative;padding:6px 0"><div class="v142-book-progress-bar" style="height:12px"><div class="v142-book-progress-fill" style="width:${pct}%"></div></div></div>` +
+          buildV33CoinHudHtml();
+
+        // ENGINE A: BALANCE SCALE (Timbangan Angka / Jungkat-Jungkit)
+        if (regEngineType === 'balance_scale') {
+          const placed = activeQForReg.placedWeights || [];
+          const rightSum = placed.reduce((acc, w) => acc + Number(w), 0);
+          const diff = rightSum - activeQForReg.targetWeight;
+          const tiltDeg = Math.max(-14, Math.min(14, diff === 0 ? 0 : (diff < 0 ? -9 : 9)));
+          const isBalanced = diff === 0 && placed.length > 0;
+          const beamColor = isBalanced ? '#34d399' : '#00d2ff';
+          stageEl.innerHTML = headerBarHtml +
+            `<div class="v18-eg-question-box" style="gap:10px">` +
+              `<div style="font:700 14px system-ui;color:#fff">${lang === 'en' ? activeQForReg.clueEn : activeQForReg.clueId}</div>` +
+              `<div style="position:relative;width:100%;max-width:440px;margin:4px auto;padding:12px 6px 6px">` +
+                `<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;transform:rotate(${tiltDeg}deg);transition:transform .35s ease;padding:0 12px">` +
+                  `<div style="width:42%;padding:10px;border-radius:14px;background:rgba(16,185,129,.22);border:2px solid #34d399;text-align:center"><small style="display:block;font-size:10px;color:#a7f3d0">TARGET</small><strong style="font:900 18px Syne,system-ui;color:#fff">${activeQForReg.leftLabel}</strong></div>` +
+                  `<div style="width:42%;padding:10px;border-radius:14px;background:rgba(0,210,255,.16);border:2px solid ${beamColor};text-align:center"><small style="display:block;font-size:10px;color:#9ef6ff">${t('ISI KANAN', 'RIGHT PAN')}</small><strong style="font:900 18px Syne,system-ui;color:#ffd460">${rightSum}</strong></div>` +
+                `</div>` +
+                `<div style="height:8px;width:88%;margin:0 auto;border-radius:999px;background:${beamColor};transform:rotate(${tiltDeg}deg);transition:transform .35s ease"></div>` +
+              `</div>` +
+              `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px">` +
+                (activeQForReg.options || []).map(w => `<button type="button" class="v142-btn subtle" data-v41-bs-add="${w}" ${egSession.answered ? 'disabled' : ''}>➕ ${w}</button>`).join('') +
+              `</div>` +
+              `<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">` +
+                `<button type="button" class="v142-btn subtle" id="v41BsResetBtn" ${egSession.answered ? 'disabled' : ''}>🔄 ${t('Kosongkan', 'Clear')}</button>` +
+                `<button type="button" class="v142-btn primary" id="v41BsCheckBtn" ${egSession.answered ? 'disabled' : ''}>⚖️ ${t('Cek Keseimbangan!', 'Check Balance!')}</button>` +
+              `</div>` +
+            `</div>` +
+            (egSession.feedbackMsg ? `<div style="padding:10px 14px;border-radius:12px;background:rgba(16,185,129,.18);border:1px solid #34d399;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${egSession.feedbackMsg}</span>${egSession.answered ? `<button type="button" class="v142-btn primary" id="v18EgNextQBtn">${t('Lanjut ➔', 'Next ➔')}</button>` : ''}</div>` : '');
+          stageEl.querySelectorAll('[data-v41-bs-add]').forEach(b => {
+            b.onclick = () => {
+              if (egSession.answered) return;
+              activeQForReg.placedWeights.push(Number(b.getAttribute('data-v41-bs-add')));
+              playGameTone('tap');
+              renderActiveEduGameStage(false);
+            };
+          });
+          stageEl.querySelector('#v41BsResetBtn')?.addEventListener('click', () => {
+            activeQForReg.placedWeights = [];
+            renderActiveEduGameStage(false);
+          });
+          stageEl.querySelector('#v41BsCheckBtn')?.addEventListener('click', () => {
+            if (egSession.answered) return;
+            handleV33QuestionOutcome(rightSum === activeQForReg.targetWeight && placed.length > 0, `${t('Total:', 'Total:')} ${rightSum} / ${activeQForReg.targetWeight}`);
+          });
+          stageEl.querySelector('#v18EgNextQBtn')?.addEventListener('click', () => advanceV33QuestionNow());
+          return;
+        }
+
+        // ENGINE B: INTERACTIVE CLOCK DIAL (Putar Jarum Jam Analog)
+        if (regEngineType === 'interactive_clock') {
+          const pad2 = n => String(n).padStart(2, '0');
+          const hrAngle = ((activeQForReg.userHour % 12) * 30) + ((activeQForReg.userMinute / 60) * 30);
+          const minAngle = activeQForReg.userMinute * 6;
+          const numsSvg = Array.from({ length: 12 }, (_, i) => {
+            const n = i + 1;
+            const ang = (n * 30 - 90) * Math.PI / 180;
+            return `<text x="${(100 + 70 * Math.cos(ang)).toFixed(1)}" y="${(100 + 70 * Math.sin(ang) + 5).toFixed(1)}" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="800">${n}</text>`;
+          }).join('');
+          stageEl.innerHTML = headerBarHtml +
+            `<div class="v18-eg-question-box" style="gap:10px">` +
+              `<div style="font:800 15px system-ui;color:#ffd460">${lang === 'en' ? activeQForReg.labelEn : activeQForReg.labelId}</div>` +
+              `<svg viewBox="0 0 200 200" style="width:170px;height:170px;margin:0 auto;display:block">` +
+                `<circle cx="100" cy="100" r="92" fill="#071329" stroke="#38bdf8" stroke-width="4"/>${numsSvg}` +
+                `<line x1="100" y1="100" x2="100" y2="54" stroke="#ffd460" stroke-width="5.5" stroke-linecap="round" transform="rotate(${hrAngle} 100 100)"/>` +
+                `<line x1="100" y1="100" x2="100" y2="34" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" transform="rotate(${minAngle} 100 100)"/>` +
+                `<circle cx="100" cy="100" r="6" fill="#fff"/>` +
+              `</svg>` +
+              `<div style="font:800 15px monospace;color:#72ffca">🕒 ${pad2(activeQForReg.userHour)}:${pad2(activeQForReg.userMinute)}</div>` +
+              `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px">` +
+                `<button type="button" class="v142-btn subtle" id="v41ClkHrMinus">◀ ${t('Jam -1', 'Hr -1')}</button>` +
+                `<button type="button" class="v142-btn subtle" id="v41ClkHrPlus">${t('Jam +1', 'Hr +1')} ▶</button>` +
+                `<button type="button" class="v142-btn subtle" id="v41ClkMinMinus">◀ ${t('Menit -5', 'Min -5')}</button>` +
+                `<button type="button" class="v142-btn subtle" id="v41ClkMinPlus">${t('Menit +5', 'Min +5')} ▶</button>` +
+              `</div>` +
+              `<button type="button" class="v142-btn primary" id="v41ClkCheckBtn" ${egSession.answered ? 'disabled' : ''}>🕒 ${t('Kunci Jawaban Jam!', 'Lock Clock Answer!')}</button>` +
+            `</div>` +
+            (egSession.feedbackMsg ? `<div style="padding:10px 14px;border-radius:12px;background:rgba(16,185,129,.18);border:1px solid #34d399;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${egSession.feedbackMsg}</span>${egSession.answered ? `<button type="button" class="v142-btn primary" id="v18EgNextQBtn">${t('Lanjut ➔', 'Next ➔')}</button>` : ''}</div>` : '');
+          stageEl.querySelector('#v41ClkHrMinus')?.addEventListener('click', () => { activeQForReg.userHour = ((activeQForReg.userHour + 10) % 12) + 1; renderActiveEduGameStage(false); });
+          stageEl.querySelector('#v41ClkHrPlus')?.addEventListener('click', () => { activeQForReg.userHour = (activeQForReg.userHour % 12) + 1; renderActiveEduGameStage(false); });
+          stageEl.querySelector('#v41ClkMinMinus')?.addEventListener('click', () => { activeQForReg.userMinute = (activeQForReg.userMinute + 55) % 60; renderActiveEduGameStage(false); });
+          stageEl.querySelector('#v41ClkMinPlus')?.addEventListener('click', () => { activeQForReg.userMinute = (activeQForReg.userMinute + 5) % 60; renderActiveEduGameStage(false); });
+          stageEl.querySelector('#v41ClkCheckBtn')?.addEventListener('click', () => {
+            if (egSession.answered) return;
+            const ok = (activeQForReg.userHour % 12) === (activeQForReg.targetHour % 12) && activeQForReg.userMinute === activeQForReg.targetMinute;
+            handleV33QuestionOutcome(ok, `${t('Target:', 'Target:')} ${pad2(activeQForReg.targetHour)}:${pad2(activeQForReg.targetMinute)}`);
+          });
+          stageEl.querySelector('#v18EgNextQBtn')?.addEventListener('click', () => advanceV33QuestionNow());
+          return;
+        }
+
+        // ENGINE C: CASHIER TRAY (Meja Kasir Pecahan Uang)
+        if (regEngineType === 'cashier_tray') {
+          const denoms = [500, 1000, 2000, 5000, 10000, 20000, 50000];
+          const traySum = (activeQForReg.trayNotes || []).reduce((acc, v) => acc + Number(v), 0);
+          stageEl.innerHTML = headerBarHtml +
+            `<div class="v18-eg-question-box" style="gap:10px">` +
+              `<div style="font-size:34px">${activeQForReg.itemIcon || '🛍️'}</div>` +
+              `<strong style="font:800 15px system-ui;color:#fff">${lang === 'en' ? activeQForReg.itemTitleEn : activeQForReg.itemTitleId}</strong>` +
+              `<div style="font:900 18px system-ui;color:#ffd460">${t('Total di Meja Kasir:', 'Tray Total:')} Rp${traySum.toLocaleString('id-ID')} <small style="color:#9ef6ff">(Target: Rp${activeQForReg.targetRp.toLocaleString('id-ID')})</small></div>` +
+              `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px">` +
+                denoms.map(d => `<button type="button" class="v142-btn subtle" data-v41-cash-add="${d}" ${egSession.answered ? 'disabled' : ''}>💵 Rp${d.toLocaleString('id-ID')}</button>`).join('') +
+              `</div>` +
+              `<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">` +
+                `<button type="button" class="v142-btn subtle" id="v41CashResetBtn" ${egSession.answered ? 'disabled' : ''}>🔄 ${t('Reset', 'Reset')}</button>` +
+                `<button type="button" class="v142-btn primary" id="v41CashCheckBtn" ${egSession.answered ? 'disabled' : ''}>💳 ${t('Bayar Sekarang!', 'Pay Now!')}</button>` +
+              `</div>` +
+            `</div>` +
+            (egSession.feedbackMsg ? `<div style="padding:10px 14px;border-radius:12px;background:rgba(16,185,129,.18);border:1px solid #34d399;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${egSession.feedbackMsg}</span>${egSession.answered ? `<button type="button" class="v142-btn primary" id="v18EgNextQBtn">${t('Lanjut ➔', 'Next ➔')}</button>` : ''}</div>` : '');
+          stageEl.querySelectorAll('[data-v41-cash-add]').forEach(b => {
+            b.onclick = () => {
+              if (egSession.answered) return;
+              activeQForReg.trayNotes.push(Number(b.getAttribute('data-v41-cash-add')));
+              playGameTone('tap');
+              renderActiveEduGameStage(false);
+            };
+          });
+          stageEl.querySelector('#v41CashResetBtn')?.addEventListener('click', () => { activeQForReg.trayNotes = []; renderActiveEduGameStage(false); });
+          stageEl.querySelector('#v41CashCheckBtn')?.addEventListener('click', () => {
+            if (egSession.answered) return;
+            handleV33QuestionOutcome(traySum === activeQForReg.targetRp, `Rp${traySum.toLocaleString('id-ID')} / Rp${activeQForReg.targetRp.toLocaleString('id-ID')}`);
+          });
+          stageEl.querySelector('#v18EgNextQBtn')?.addEventListener('click', () => advanceV33QuestionNow());
+          return;
+        }
+
+        // ENGINE D: DRAG/TAP SEQUENCE (Susun Urutan Langkah: Sejarah, IPA, Wudhu, Adab)
+        if (regEngineType === 'drag_sequence') {
+          const pickedIds = activeQForReg.pickedIds || [];
+          const cards = activeQForReg.cards || [];
+          stageEl.innerHTML = headerBarHtml +
+            `<div class="v18-eg-question-box" style="gap:10px">` +
+              `<div style="font:800 14.5px system-ui;color:#ffd460">📋 ${lang === 'en' ? activeQForReg.promptEn : activeQForReg.promptId}</div>` +
+              `<div style="font:600 12px system-ui;color:#9ef6ff">${t('Ketuk kartu langkah secara berurutan dari langkah ke-1 sampai terakhir:', 'Tap the step cards in exact chronological order from 1st to last:')}</div>` +
+              `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;width:100%">` +
+                cards.map(c => {
+                  const pos = pickedIds.indexOf(c.id);
+                  const isPicked = pos >= 0;
+                  return `<button type="button" class="v142-btn ${isPicked ? 'gold' : 'subtle'}" data-v41-seq-pick="${c.id}" ${egSession.answered ? 'disabled' : ''} style="justify-content:flex-start;text-align:left;padding:10px 12px"><span>${c.icon}</span><span>${isPicked ? `<b>#${pos + 1}</b> · ` : ''}${lang === 'en' ? c.textEn : c.textId}</span></button>`;
+                }).join('') +
+              `</div>` +
+              `<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">` +
+                `<button type="button" class="v142-btn subtle" id="v41SeqResetBtn" ${egSession.answered ? 'disabled' : ''}>🔄 ${t('Ulangi Urutan', 'Reset Order')}</button>` +
+              `</div>` +
+            `</div>` +
+            (egSession.feedbackMsg ? `<div style="padding:10px 14px;border-radius:12px;background:rgba(16,185,129,.18);border:1px solid #34d399;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${egSession.feedbackMsg}</span>${egSession.answered ? `<button type="button" class="v142-btn primary" id="v18EgNextQBtn">${t('Lanjut ➔', 'Next ➔')}</button>` : ''}</div>` : '');
+          stageEl.querySelectorAll('[data-v41-seq-pick]').forEach(b => {
+            b.onclick = () => {
+              if (egSession.answered) return;
+              const cid = b.getAttribute('data-v41-seq-pick');
+              if (pickedIds.includes(cid)) return;
+              pickedIds.push(cid);
+              playGameTone('tap');
+              if (pickedIds.length >= activeQForReg.steps.length) {
+                const isOrderCorrect = pickedIds.every((idVal, idx) => {
+                  const stObj = activeQForReg.steps[idx];
+                  const expectedId = stObj?.id || ('st-' + idx);
+                  return idVal === expectedId;
+                });
+                handleV33QuestionOutcome(isOrderCorrect, isOrderCorrect ? t('Urutan langkah 100% tepat!', 'Exact order!') : t('Urutan masih kurang tepat.', 'Order was not exact.'));
+              } else {
+                renderActiveEduGameStage(false);
+              }
+            };
+          });
+          stageEl.querySelector('#v41SeqResetBtn')?.addEventListener('click', () => { activeQForReg.pickedIds = []; renderActiveEduGameStage(false); });
+          stageEl.querySelector('#v18EgNextQBtn')?.addEventListener('click', () => advanceV33QuestionNow());
+          return;
+        }
+
+        // ENGINE E: MATCH PAIRS (Cocokkan Pasangan Kiri & Kanan)
+        if (regEngineType === 'match_pairs') {
+          const pairs = activeQForReg.pairs || [];
+          const matchedSet = new Set(activeQForReg.matchedIds || []);
+          stageEl.innerHTML = headerBarHtml +
+            `<div class="v18-eg-question-box" style="gap:10px">` +
+              `<div style="font:800 14.5px system-ui;color:#ffd460">🔗 ${lang === 'en' ? activeQForReg.promptEn : activeQForReg.promptId}</div>` +
+              `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%">` +
+                `<div style="display:grid;gap:6px">` +
+                  pairs.map((p, idx) => {
+                    const pid = p.id || ('pr-' + idx);
+                    const isM = matchedSet.has(pid);
+                    const isSel = activeQForReg.selectedLeftId === pid;
+                    return `<button type="button" class="v142-btn ${isM ? 'gold' : (isSel ? 'primary' : 'subtle')}" data-v41-mp-left="${pid}" ${isM || egSession.answered ? 'disabled' : ''}>${p.icon || '🔹'} ${p.left || p.textLeft || ''}</button>`;
+                  }).join('') +
+                `</div>` +
+                `<div style="display:grid;gap:6px">` +
+                  (activeQForReg.rightItems || []).map(r => {
+                    const isM = matchedSet.has(r.id);
+                    return `<button type="button" class="v142-btn ${isM ? 'gold' : 'subtle'}" data-v41-mp-right="${r.id}" ${isM || egSession.answered ? 'disabled' : ''}>${r.text}</button>`;
+                  }).join('') +
+                `</div>` +
+              `</div>` +
+            `</div>` +
+            (egSession.feedbackMsg ? `<div style="padding:10px 14px;border-radius:12px;background:rgba(16,185,129,.18);border:1px solid #34d399;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${egSession.feedbackMsg}</span>${egSession.answered ? `<button type="button" class="v142-btn primary" id="v18EgNextQBtn">${t('Lanjut ➔', 'Next ➔')}</button>` : ''}</div>` : '');
+          stageEl.querySelectorAll('[data-v41-mp-left]').forEach(b => {
+            b.onclick = () => {
+              if (egSession.answered) return;
+              activeQForReg.selectedLeftId = b.getAttribute('data-v41-mp-left');
+              playGameTone('tap');
+              renderActiveEduGameStage(false);
+            };
+          });
+          stageEl.querySelectorAll('[data-v41-mp-right]').forEach(b => {
+            b.onclick = () => {
+              if (egSession.answered || !activeQForReg.selectedLeftId) return;
+              const rid = b.getAttribute('data-v41-mp-right');
+              if (rid === activeQForReg.selectedLeftId) {
+                activeQForReg.matchedIds.push(rid);
+                activeQForReg.selectedLeftId = null;
+                playGameTone('correct');
+                if (activeQForReg.matchedIds.length >= pairs.length) {
+                  handleV33QuestionOutcome(true, t('Semua pasangan berhasil dicocokkan!', 'All pairs matched!'));
+                } else {
+                  renderActiveEduGameStage(false);
+                }
+              } else {
+                playGameTone('wrong');
+                activeQForReg.selectedLeftId = null;
+                handleV33QuestionOutcome(false, t('Pasangan belum cocok!', 'Pairs did not match!'));
+              }
+            };
+          });
+          stageEl.querySelector('#v18EgNextQBtn')?.addEventListener('click', () => advanceV33QuestionNow());
+          return;
+        }
+
+        // ENGINE F: WORD BUILDER (Susun Huruf / Kata)
+        if (regEngineType === 'word_builder') {
+          const picked = activeQForReg.pickedIndices || [];
+          const built = picked.map(i => activeQForReg.letters[i]?.ch || '').join('');
+          stageEl.innerHTML = headerBarHtml +
+            `<div class="v18-eg-question-box" style="gap:10px">` +
+              `<div style="font-size:40px">${activeQForReg.icon || '🔤'}</div>` +
+              `<div style="font:700 14px system-ui;color:#fff">${lang === 'en' ? activeQForReg.clueEn : activeQForReg.clueId}</div>` +
+              `<div style="padding:8px 18px;border-radius:12px;background:rgba(4,12,28,.9);border:2px solid #38bdf8;font:900 24px/1.2 monospace;letter-spacing:.18em;color:#ffd460;min-height:36px">${built || '_'.repeat(activeQForReg.targetWord.length)}</div>` +
+              `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px">` +
+                activeQForReg.letters.map((l, idx) => `<button type="button" class="v142-btn ${picked.includes(idx) ? 'gold' : 'subtle'}" data-v41-wb-pick="${idx}" ${picked.includes(idx) || egSession.answered ? 'disabled' : ''} style="min-width:42px;font-weight:900">${l.ch}</button>`).join('') +
+              `</div>` +
+              `<button type="button" class="v142-btn subtle" id="v41WbResetBtn" ${egSession.answered ? 'disabled' : ''}>🔄 ${t('Hapus Huruf', 'Clear Letters')}</button>` +
+            `</div>` +
+            (egSession.feedbackMsg ? `<div style="padding:10px 14px;border-radius:12px;background:rgba(16,185,129,.18);border:1px solid #34d399;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${egSession.feedbackMsg}</span>${egSession.answered ? `<button type="button" class="v142-btn primary" id="v18EgNextQBtn">${t('Lanjut ➔', 'Next ➔')}</button>` : ''}</div>` : '');
+          stageEl.querySelectorAll('[data-v41-wb-pick]').forEach(b => {
+            b.onclick = () => {
+              if (egSession.answered) return;
+              const idx = Number(b.getAttribute('data-v41-wb-pick'));
+              if (!picked.includes(idx)) picked.push(idx);
+              playGameTone('tap');
+              const nowBuilt = picked.map(i => activeQForReg.letters[i]?.ch || '').join('');
+              if (nowBuilt.length >= activeQForReg.targetWord.length) {
+                handleV33QuestionOutcome(nowBuilt === activeQForReg.targetWord, `${t('Kata:', 'Word:')} ${activeQForReg.targetWord}`);
+              } else {
+                renderActiveEduGameStage(false);
+              }
+            };
+          });
+          stageEl.querySelector('#v41WbResetBtn')?.addEventListener('click', () => { activeQForReg.pickedIndices = []; renderActiveEduGameStage(false); });
+          stageEl.querySelector('#v18EgNextQBtn')?.addEventListener('click', () => advanceV33QuestionNow());
+          return;
+        }
+
+        // ENGINE G: MEMORY FLIP (Kartu Memori Buka-Tutup)
+        if (regEngineType === 'memory_flip') {
+          const deck = activeQForReg.deck || [];
+          stageEl.innerHTML = headerBarHtml +
+            `<div class="v18-eg-question-box" style="gap:10px">` +
+              `<div style="font:800 14.5px system-ui;color:#ffd460">🃏 ${lang === 'en' ? activeQForReg.promptEn : activeQForReg.promptId} (${activeQForReg.matchedCount}/${activeQForReg.totalPairs})</div>` +
+              `<div style="display:grid;grid-template-columns:repeat(4,minmax(64px,1fr));gap:8px;width:100%">` +
+                deck.map((c, idx) => {
+                  const vis = c.flipped || c.matched;
+                  return `<button type="button" class="v18-eg-mem-card ${c.flipped ? 'is-flipped' : ''} ${c.matched ? 'is-matched' : ''}" data-v41-mf-idx="${idx}" ${c.matched || egSession.answered ? 'disabled' : ''}>${vis ? `<span style="font-size:24px">${c.icon}</span><small style="font-size:10px;color:#fff">${c.label}</small>` : `<span style="font-size:20px;color:#8ef5ff">❖</span>`}</button>`;
+                }).join('') +
+              `</div>` +
+            `</div>` +
+            (egSession.feedbackMsg ? `<div style="padding:10px 14px;border-radius:12px;background:rgba(16,185,129,.18);border:1px solid #34d399;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${egSession.feedbackMsg}</span>${egSession.answered ? `<button type="button" class="v142-btn primary" id="v18EgNextQBtn">${t('Lanjut ➔', 'Next ➔')}</button>` : ''}</div>` : '');
+          stageEl.querySelectorAll('[data-v41-mf-idx]').forEach(b => {
+            b.onclick = () => {
+              if (egSession.answered) return;
+              const idx = Number(b.getAttribute('data-v41-mf-idx'));
+              if (deck[idx].flipped || deck[idx].matched || activeQForReg.openIndices.length >= 2) return;
+              deck[idx].flipped = true;
+              activeQForReg.openIndices.push(idx);
+              playGameTone('tap');
+              if (activeQForReg.openIndices.length === 2) {
+                const [aIdx, bIdx] = activeQForReg.openIndices;
+                if (deck[aIdx].pairId === deck[bIdx].pairId) {
+                  deck[aIdx].matched = true;
+                  deck[bIdx].matched = true;
+                  activeQForReg.openIndices = [];
+                  activeQForReg.matchedCount++;
+                  playGameTone('correct');
+                  if (activeQForReg.matchedCount >= activeQForReg.totalPairs) {
+                    handleV33QuestionOutcome(true, t('Semua pasangan memori terbuka!', 'All memory pairs matched!'));
+                    return;
+                  }
+                } else {
+                  setTimeout(() => {
+                    deck[aIdx].flipped = false;
+                    deck[bIdx].flipped = false;
+                    activeQForReg.openIndices = [];
+                    renderActiveEduGameStage(false);
+                  }, 650);
+                }
+              }
+              renderActiveEduGameStage(false);
+            };
+          });
+          stageEl.querySelector('#v18EgNextQBtn')?.addEventListener('click', () => advanceV33QuestionNow());
+          return;
+        }
+
+        // ENGINE H: MICRO-PLUGIN SANDBOX IFRAME (Custom HTML5 / Canvas Game from .ZIP)
+        if (regEngineType === 'micro_plugin') {
+          const pluginHtml = activeQForReg.pluginHtml || gMeta.pluginHtml || '<p style="color:#fff">Plugin kosong.</p>';
+          stageEl.innerHTML = headerBarHtml +
+            `<div class="v18-eg-question-box" style="padding:8px">` +
+              `<iframe id="v41MicroPluginFrame" sandbox="allow-scripts" style="width:100%;min-height:360px;border:1.5px solid #38bdf8;border-radius:14px;background:#040d1e"></iframe>` +
+            `</div>`;
+          const ifr = stageEl.querySelector('#v41MicroPluginFrame');
+          if (ifr) ifr.srcdoc = pluginHtml;
+          if (!window.__wyphaV41PluginListenerBound) {
+            window.__wyphaV41PluginListenerBound = true;
+            window.addEventListener('message', ev => {
+              const d = ev?.data;
+              if (!d || typeof d !== 'object') return;
+              if (d.type === 'WYPHA_GAME_RESULT') {
+                handleV33QuestionOutcome(Boolean(d.isCorrect), String(d.detailMsg || ''));
+              } else if (d.type === 'WYPHA_SESSION_COMPLETE') {
+                completeEduGameSession(Number(d.score || 100));
+              }
+            });
+          }
+          return;
+        }
       }
 
       // STANDARD MULTIPLE-CHOICE STAGE (Math Rocket, Pattern Logic, Kids Finance, Science Lab, Geo Explorer, Clock Master, Eco & Adab, Antonym/Synonym)
@@ -47330,7 +47851,21 @@ function v142CustomerRuntime(C) {
         const wasCustomAddOpen = _origLearnQS('#v39AddCustomLearnDrawer')?.open || false;
         const activeLearnDecks = getActiveLearnDecksCatalogV39();
         const hasPaiLearnDecks = activeLearnDecks.some(d => d.subjectTab === 'mengaji_doa');
-        const visibleLearnTabs = V39_LEARN_SUBJECT_TABS.filter(tb => tb.id !== 'mengaji_doa' || hasPaiLearnDecks);
+        const baseLearnTabs = V39_LEARN_SUBJECT_TABS.filter(tb => tb.id !== 'mengaji_doa' || hasPaiLearnDecks);
+        const knownLearnTabIds = new Set(baseLearnTabs.map(tb => tb.id));
+        const dynamicLearnTabs = [];
+        activeLearnDecks.forEach(d => {
+          if (d.subjectTab && !knownLearnTabIds.has(d.subjectTab)) {
+            knownLearnTabIds.add(d.subjectTab);
+            dynamicLearnTabs.push({
+              id: d.subjectTab,
+              icon: d.subjectIcon || d.icon || '🧩',
+              labelId: d.subjectLabelId || d.subjectTab.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+              labelEn: d.subjectLabelEn || d.subjectLabelId || d.subjectTab.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+            });
+          }
+        });
+        const visibleLearnTabs = [...baseLearnTabs, ...dynamicLearnTabs];
         if (!visibleLearnTabs.some(tb => tb.id === il.subjectFilter)) il.subjectFilter = 'all';
         const filteredLearnDecks = il.subjectFilter === 'all'
           ? activeLearnDecks
@@ -47949,7 +48484,21 @@ function v142CustomerRuntime(C) {
               : activeCatalog.filter(gm => gm.subjectTab === activeFilter);
 
             const hasPaiEduGames = activeCatalog.some(gm => gm.subjectTab === 'mengaji_pai');
-            const visibleEduSubjectTabs = EDU_GAME_SUBJECT_TABS.filter(tab => tab.id !== 'mengaji_pai' || hasPaiEduGames);
+            const baseEduTabs = EDU_GAME_SUBJECT_TABS.filter(tab => tab.id !== 'mengaji_pai' || hasPaiEduGames);
+            const knownEduTabIds = new Set(baseEduTabs.map(tb => tb.id));
+            const dynamicEduTabs = [];
+            activeCatalog.forEach(gm => {
+              if (gm.subjectTab && !knownEduTabIds.has(gm.subjectTab)) {
+                knownEduTabIds.add(gm.subjectTab);
+                dynamicEduTabs.push({
+                  id: gm.subjectTab,
+                  icon: gm.subjectIcon || gm.icon || '📚',
+                  labelId: gm.subjectLabelId || gm.subjectTab.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                  labelEn: gm.subjectLabelEn || gm.subjectLabelId || gm.subjectTab.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                });
+              }
+            });
+            const visibleEduSubjectTabs = [...baseEduTabs, ...dynamicEduTabs];
             const subjectTabsHtml = visibleEduSubjectTabs.map(tab => {
               const count = tab.id === 'all'
                 ? activeCatalog.length
