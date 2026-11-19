@@ -1,6 +1,6 @@
-// Scope-aware app-shell cache for WYPHA Studio & Customer Microsites V46
+// Scope-aware app-shell cache for WYPHA Studio & Customer Microsites V47
 const PREFIX = 'wypha-v13.3.0';
-const CACHE = PREFIX + '-portal-v46-biodata-privacy-ws-countdown5s-20261119-' + encodeURIComponent(self.registration.scope);
+const CACHE = PREFIX + '-portal-v47-countdown10s-cloud-biodata-sync-20261119-' + encodeURIComponent(self.registration.scope);
 const SHELL = ['./', 'index.html', 'rescue.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'].map(p => new URL(p, self.registration.scope).href);
 
 self.addEventListener('install', e => {
