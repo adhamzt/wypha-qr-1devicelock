@@ -1,6 +1,6 @@
-// Scope-aware app-shell cache for WYPHA Studio & Customer Microsites V48
+// Scope-aware app-shell cache for WYPHA Studio & Customer Microsites V49
 const PREFIX = 'wypha-v13.3.0';
-const CACHE = PREFIX + '-portal-v48-countdown30s-full-passport-lock-sobatwypha-20261119-' + encodeURIComponent(self.registration.scope);
+const CACHE = PREFIX + '-portal-v49-backup-lock-guard-sheet-reject-count-20261119-' + encodeURIComponent(self.registration.scope);
 const SHELL = ['./', 'index.html', 'rescue.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'].map(p => new URL(p, self.registration.scope).href);
 
 self.addEventListener('install', e => {
