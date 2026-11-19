@@ -47695,12 +47695,19 @@ function v142CustomerRuntime(C) {
             syllable: String(c.syllable || c.wordId || ''),
             exampleId: String(c.exampleId || c.example || ''),
             exampleEn: String(c.exampleEn || c.exampleId || ''),
+            speechAr: c.speechAr ? String(c.speechAr) : undefined,
+            speechId: c.speechId ? String(c.speechId) : undefined,
+            speechEn: c.speechEn ? String(c.speechEn) : undefined,
+            countNum: c.countNum ? Number(c.countNum) : undefined,
             traceGlyph: String(c.traceGlyph || c.symbol || 'A').slice(0, 4)
           }));
           const existingIdx = il.customDecks.findIndex(x => x && x.id === dId);
           const deckObj = {
             id: dId,
             subjectTab: d.subjectTab || 'bahasa_baca',
+            subjectLabelId: String(d.subjectLabelId || '').trim(),
+            subjectLabelEn: String(d.subjectLabelEn || d.subjectLabelId || '').trim(),
+            subjectIcon: String(d.subjectIcon || '').trim(),
             icon: d.icon || '🃏',
             color: d.color || '#00d2ff',
             titleId: d.titleId || d.title || 'Pelajaran Flashcard Baru',
@@ -47735,6 +47742,10 @@ function v142CustomerRuntime(C) {
             syllable: String(c.syllable || c.wordId || ''),
             exampleId: String(c.exampleId || ''),
             exampleEn: String(c.exampleEn || c.exampleId || ''),
+            speechAr: c.speechAr ? String(c.speechAr) : undefined,
+            speechId: c.speechId ? String(c.speechId) : undefined,
+            speechEn: c.speechEn ? String(c.speechEn) : undefined,
+            countNum: c.countNum ? Number(c.countNum) : undefined,
             traceGlyph: String(c.traceGlyph || c.symbol || 'A').slice(0, 4)
           });
           if (!il.zipUnlockedDeckIds.includes(targetDeck)) il.zipUnlockedDeckIds.push(targetDeck);
