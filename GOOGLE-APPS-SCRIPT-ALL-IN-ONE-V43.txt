@@ -1,0 +1,1525 @@
+/**
+ * ============================================================================
+ * WYPHA STUDIO V43 — GOOGLE APPS SCRIPT SMART CLOUD BACKEND (ALL-IN-ONE)
+ * ============================================================================
+ * FITUR LENGKAP V40 (100% BEBAS ERROR & KOMPATIBEL PENUH):
+ *   1. Menu Atas Otomatis "🛡️ Admin Kunci 2-HP WYPHA" di Google Sheets (Reset 1 Klik!)
+ *   2. Tab Khusus "WyphaReset_Cepat" + Sinkronisasi "WyphaDeviceLocks" & "Daftar_Kunci_Perangkat"
+ *   3. Centang Kotak [✓] di Kolom Reset otomatis mereset perangkat ke 0/2 (via onEdit)
+ *   4. Banner Broadcast Otomatis di Paling Atas Microsite ("WyphaBroadcast" — Mendukung ID Proyek & ALL)
+ *   5. Remote Unlock Paket Game dari Kolom J (BASIC_5 / STANDAR_12 / INTERAKTIF_15 / QURAN_12 / STEM_15 / ULTIMATE_45)
+ *   6. Jembatan Upload Otomatis Foto/Aset ke Google Drive ("WYPHA-CLOUD-MEDIA")
+ *   7. Auto-Backup & Restore Progres Anak Pindah HP 1-Klik
+ *   8. Dinding Doa & Buku Tamu Keluarga Live ("WyphaGuestbook")
+ *   9. Kirim E-Raport Otomatis ke Email Orang Tua via Gmail (MailApp)
+ *  10. Papan Peringkat Bintang ("WyphaLeaderboard") & Rekaman Suara ("WyphaMilestones")
+ *
+ * CARA PASANG / UPDATE DI GOOGLE SHEETS ANDA:
+ * 1. Buka Google Sheets Anda -> klik menu Extensions (Ekstensi) -> Apps Script.
+ * 2. Hapus kode lama, tempel (Paste) seluruh kode V40 ini, lalu tekan Simpan (Ctrl+S).
+ * 3. (Opsional) Klik tombol "▶ Run / Jalankan" pada fungsi "setupAllWyphaSheets" di atas
+ *    untuk langsung memunculkan menu "🛡️ Admin Kunci 2-HP WYPHA" & seluruh tab di Sheets Anda.
+ * 4. Klik "Deploy" -> "Manage deployments" -> klik ikon Pensil (Edit) ->
+ *    pilih Version: "New version" -> klik "Deploy".
+ * ============================================================================
+ */
+
+var FALLBACK_SHEET_ID = '1stMb-JL7yz08qsUK7gkEBb-CXB7ZZHbTu5H6rliw2KI';
+var SHEET_LOCKS = 'WyphaDeviceLocks';
+var SHEET_LEGACY_LOCKS = 'Daftar_Kunci_Perangkat';
+var SHEET_RESET_TAB = 'WyphaReset_Cepat';
+var SHEET_BROADCAST = 'WyphaBroadcast';
+var SHEET_GUESTBOOK = 'WyphaGuestbook';
+var SHEET_LEADERBOARD = 'WyphaLeaderboard';
+var SHEET_MILESTONES = 'WyphaMilestones';
+var SHEET_ACCESS_MONITOR = 'Monitor_Akses_Microsite';
+var SHEET_CURHAT = 'WyphaCurhat';
+var MAX_DEVICES = 2;
+var DEFAULT_ROOT_FOLDER_NAME = 'WYPHA-CLOUD-MEDIA';
+var OPTIONAL_UPLOAD_TOKEN = '';
+
+// FUNGSI PERTAMA (Aman dijalankan langsung dengan tombol "▶ Run / Jalankan" di Editor Apps Script!)
+function setupAllWyphaSheets() {
+  var ss = getSpreadsheet_();
+  getOrCreateLockSheet(ss);
+  getOrCreateLegacyLockSheet(ss);
+  getOrCreateResetTabSheet(ss);
+  getOrCreateBroadcastSheet(ss);
+  getOrCreateGuestbookSheet(ss);
+  getOrCreateLeaderboardSheet(ss);
+  getOrCreateMilestonesSheet(ss);
+  getOrCreateCurhatSheet(ss);
+  onOpen();
+  return '✓ Seluruh 7 Tab WYPHA V40 & Menu Admin Reset berhasil disiapkan!';
+}
+
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('🛡️ Admin Kunci 2-HP WYPHA')
+      .addItem('🔄 1. Siapkan & Sinkronkan Semua Tab Cloud WYPHA V40', 'setupAllWyphaSheets')
+      .addItem('🔓 2. Reset Kunci Penuh (0/2) pada Baris yang Dipilih', 'resetSelectedRowLock')
+      .addItem('📱 3. Hapus HP ke-2 Saja pada Baris yang Dipilih (Sisakan HP ke-1)', 'removeSecondDeviceOnSelectedRow')
+      .addSeparator()
+      .addItem('📢 4. Aktifkan Broadcast Pengumuman pada Baris Ini', 'activateBroadcastNow')
+      .addItem('🧪 5. Tambah Baris Tes (Uji Reaksi Tabel)', 'setupSheetAndTest')
+      .addItem('🗑️ 6. Reset Semua Kunci Perangkat', 'resetAllDeviceLocks')
+      .addToUi();
+  } catch (err) {}
+}
+
+// Otomatis mereset kunci begitu Admin mencentang checkbox atau mengetik RESET di Google Sheets!
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    var sheet = e.range.getSheet();
+    var sName = sheet.getName();
+    var row = e.range.getRow();
+    var col = e.range.getColumn();
+    if (row < 2) return;
+
+    var val = String(e.range.getValue() || '').trim().toUpperCase();
+    var isResetTrigger = (val === 'TRUE' || val === 'RESET' || val === 'YA' || val === '1' || val === ' RESET SEKARANG');
+
+    if (sName === SHEET_LOCKS && col === 9 && isResetTrigger) {
+      var pid = String(sheet.getRange(row, 1).getValue() || '').trim();
+      if (pid) {
+        performFullResetForProject_(pid);
+        e.range.setValue(false);
+      }
+    } else if (sName === SHEET_LEGACY_LOCKS && (col === 4 || col === 8 || col === 9) && isResetTrigger) {
+      var pid2 = String(sheet.getRange(row, 1).getValue() || '').trim();
+      if (pid2) {
+        performFullResetForProject_(pid2);
+        if (col === 9) e.range.setValue(false);
+      }
+    } else if (sName === SHEET_RESET_TAB && (col === 2 || col === 3) && isResetTrigger) {
+      var targetPid = String(sheet.getRange(row, 1).getValue() || '').trim();
+      if (targetPid) {
+        if (col === 3 && (val === 'TRUE' || val === 'HAPUS_HP_2')) {
+          performRemoveSecondDeviceForProject_(targetPid);
+        } else {
+          performFullResetForProject_(targetPid);
+        }
+        e.range.setValue(false);
+        sheet.getRange(row, 4).setValue('✓ Direset pada ' + formatWibNow_());
+      }
+    } else if ((sName === SHEET_NAME || sName === LEGACY_LOCK_SHEET) && col === 10 && val !== '') {
+      var pidTier = String(sheet.getRange(row, 1).getValue() || '').trim();
+      if (pidTier) {
+        var otherSheet = sName === SHEET_NAME ? getOrCreateLegacyLockSheet( sheet.getParent() ) : getOrCreateLockSheet( sheet.getParent() );
+        var oRows = otherSheet.getDataRange().getValues();
+        for (var rIdx = oRows.length - 1; rIdx >= 1; rIdx--) {
+          if (String(oRows[rIdx][0] || '').trim().toLowerCase() === pidTier.toLowerCase()) {
+            otherSheet.getRange(rIdx + 1, 10).setValue(String(val).trim());
+          }
+        }
+      }
+    } else if (sName === SHEET_CURHAT && col === 6 && val !== '') {
+      sheet.getRange(row, 7).setValue(formatWibNow_());
+    }
+  } catch (err) {}
+}
+
+function getSpreadsheet_() {
+  var ss = null;
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+  } catch (e) {}
+  if (!ss && FALLBACK_SHEET_ID) {
+    try {
+      ss = SpreadsheetApp.openById(FALLBACK_SHEET_ID);
+    } catch (e2) {}
+  }
+  return ss;
+}
+
+function formatWibNow_() {
+  return Utilities.formatDate(new Date(), 'Asia/Jakarta', 'dd/MM/yyyy HH:mm:ss') + ' WIB';
+}
+
+function getWibTimestampParts_() {
+  var now = new Date();
+  return {
+    tanggal: Utilities.formatDate(now, 'Asia/Jakarta', 'dd/MM/yyyy'),
+    jam: Utilities.formatDate(now, 'Asia/Jakarta', 'HH:mm:ss') + ' WIB',
+    lengkap: Utilities.formatDate(now, 'Asia/Jakarta', 'dd/MM/yyyy HH:mm:ss') + ' WIB'
+  };
+}
+
+function parseDeviceList_(raw) {
+  if (!raw) return [];
+  var parts = String(raw).split(/[,|;\n]+/);
+  var out = [];
+  for (var i = 0; i < parts.length; i++) {
+    var clean = String(parts[i] || '').trim().toUpperCase();
+    if (clean && out.indexOf(clean) === -1 && out.length < MAX_DEVICES) {
+      out.push(clean);
+    }
+  }
+  return out;
+}
+
+function getOrCreateLockSheet(ssOpt) {
+  var ss = ssOpt || getSpreadsheet_();
+  var sheet = ss.getSheetByName(SHEET_LOCKS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_LOCKS);
+    sheet.appendRow([
+      'Project ID',
+      'Nama Customer',
+      'Perangkat 1 (Owner 1)',
+      'Perangkat 2 (Owner 2)',
+      'Jumlah Terpakai',
+      'Waktu Klaim Pertama',
+      'Terakhir Diakses',
+      'Total Akses',
+      'Centang / Ketik RESET Untuk Mereset',
+      'Paket Game Remote (BASIC_5 / STANDAR_12 / INTERAKTIF_15 / QURAN_12 / STEM_15 / ULTIMATE_45)',
+      'Percobaan HP ke-3+ Ditolak',
+      'Portal Worksheet (TERKUNCI / TERBUKA)',
+      'URL Portal Worksheet (Opsional)'
+    ]);
+    sheet.getRange('A1:M1').setFontWeight('bold').setBackground('#d9ead3');
+    sheet.setFrozenRows(1);
+  } else {
+    if (sheet.getLastColumn() < 10) {
+      sheet.getRange(1, 9).setValue('Centang / Ketik RESET Untuk Mereset').setFontWeight('bold').setBackground('#d9ead3');
+      sheet.getRange(1, 10).setValue('Paket Game Remote (BASIC_5 / STANDAR_12 / INTERAKTIF_15 / QURAN_12 / STEM_15 / ULTIMATE_45)')
+        .setFontWeight('bold').setBackground('#d9ead3');
+    }
+    if (sheet.getLastColumn() < 11 || !String(sheet.getRange(1, 11).getValue() || '').trim()) {
+      sheet.getRange(1, 11).setValue('Percobaan HP ke-3+ Ditolak').setFontWeight('bold').setBackground('#d9ead3');
+    }
+    if (sheet.getLastColumn() < 12 || !String(sheet.getRange(1, 12).getValue() || '').trim()) {
+      sheet.getRange(1, 12).setValue('Portal Worksheet (TERKUNCI / TERBUKA)').setFontWeight('bold').setBackground('#d9ead3');
+    }
+    if (sheet.getLastColumn() < 13 || !String(sheet.getRange(1, 13).getValue() || '').trim()) {
+      sheet.getRange(1, 13).setValue('URL Portal Worksheet (Opsional)').setFontWeight('bold').setBackground('#d9ead3');
+    }
+  }
+  return sheet;
+}
+
+function getOrCreateLegacyLockSheet(ssOpt) {
+  var ss = ssOpt || getSpreadsheet_();
+  var sheet = ss.getSheetByName(SHEET_LEGACY_LOCKS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_LEGACY_LOCKS);
+    var headers = [
+      'Project ID',
+      'Nama Customer',
+      'ID-HP Terdaftar (Maks 2 HP: Slot 1/2 & 2/2)',
+      'Status Kunci',
+      'Waktu Klaim Pertama',
+      'Terakhir Verifikasi',
+      'Percobaan HP ke-3+ Ditolak',
+      'Catatan Admin',
+      'Centang Reset Cepat',
+      'Paket Game Remote'
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#0f172a').setFontColor('#38bdf8');
+    sheet.setFrozenRows(1);
+  } else if (sheet.getLastColumn() < 10) {
+    sheet.getRange(1, 9).setValue('Centang Reset Cepat');
+    sheet.getRange(1, 10).setValue('Paket Game Remote');
+  }
+  return sheet;
+}
+
+function getOrCreateResetTabSheet(ssOpt) {
+  var ss = ssOpt || getSpreadsheet_();
+  var sheet = ss.getSheetByName(SHEET_RESET_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_RESET_TAB);
+    sheet.appendRow([
+      'Project ID Customer',
+      'Centang [✓] Untuk RESET PENUH (0/2)',
+      'Centang [✓] Untuk HAPUS HP KE-2 SAJA (1/2)',
+      'Status & Waktu Reset Terakhir',
+      'Petunjuk Penggunaan Tab Reset Cepat'
+    ]);
+    sheet.getRange('A1:E1').setFontWeight('bold').setBackground('#f4cccc');
+    sheet.setFrozenRows(1);
+    sheet.appendRow([
+      'CONTOH-ID-PROYEK',
+      false,
+      false,
+      'Siap digunakan',
+      'Ketik Project ID di Kolom A, lalu centang kotak di Kolom B (Reset 0/2) atau Kolom C (Hapus HP ke-2). Bisa juga klik menu "🛡️ Admin Kunci 2-HP WYPHA" di atas!'
+    ]);
+    try {
+      sheet.getRange('B2:C50').insertCheckboxes();
+    } catch (e) {}
+  }
+  return sheet;
+}
+
+function getOrCreateBroadcastSheet(ssOpt) {
+  var ss = ssOpt || getSpreadsheet_();
+  var sheet = ss.getSheetByName(SHEET_BROADCAST);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_BROADCAST);
+    sheet.appendRow(['Aktif (YA/TIDAK)', 'Target Project ID (ALL atau ID Proyek)', 'Judul Pengumuman / Promo', 'Isi Pesan Promo', 'Teks Tombol CTA', 'Link Tujuan / WhatsApp']);
+    sheet.getRange('A1:F1').setFontWeight('bold').setBackground('#fce5cd');
+    sheet.setFrozenRows(1);
+    sheet.appendRow([
+      'YA',
+      'ALL',
+      '✨ Promo Upgrade 45 Game Interaktif V40!',
+      'Kini hadir 10 Game Interaktif Sentuh baru (Jungkat-Jungkit Angka, Putar Jam, Meja Kasir, Sirkuit Listrik, Simulasi Wudhu). Hubungi Admin untuk buka semua 45 game!',
+      '💬 Hubungi Admin via WhatsApp',
+      'https://wa.me/6281234567890'
+    ]);
+  }
+  return sheet;
+}
+
+function getOrCreateGuestbookSheet(ssOpt) {
+  var ss = ssOpt || getSpreadsheet_();
+  var sheet = ss.getSheetByName(SHEET_GUESTBOOK);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_GUESTBOOK);
+    sheet.appendRow(['Waktu', 'Project ID', 'Nama Pengirim', 'Hubungan Keluarga', 'Doa & Ucapan', 'Emoji', 'Status (TAMPIL / HAPUS)']);
+    sheet.getRange('A1:G1').setFontWeight('bold').setBackground('#cfe2f3');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getOrCreateLeaderboardSheet(ssOpt) {
+  var ss = ssOpt || getSpreadsheet_();
+  var sheet = ss.getSheetByName(SHEET_LEADERBOARD);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_LEADERBOARD);
+    sheet.appendRow(['Project ID', 'Nama Anak', 'Total Bintang', 'Lencana Terbuka', 'Rata-rata Skor', 'Game Terakhir', 'Waktu Update']);
+    sheet.getRange('A1:G1').setFontWeight('bold').setBackground('#fff2cc');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+
+function getOrCreateCurhatSheet(ssOpt) {
+  var ss = ssOpt || getSpreadsheet_();
+  var sheet = ss.getSheetByName(SHEET_CURHAT);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_CURHAT);
+    sheet.appendRow([
+      'Waktu Kirim',
+      'Project ID',
+      'Nama Customer',
+      'Topik / Suasana Hati',
+      'Isi Curahan Hati Customer',
+      'Balasan Resmi Wypha PrintLab (Ketik Balasan Anda di Kolom Ini)',
+      'Waktu Balasan',
+      'Status (TAMPIL / HAPUS)'
+    ]);
+    sheet.getRange('A1:H1').setFontWeight('bold').setBackground('#d9d2e9');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(5, 320);
+    sheet.setColumnWidth(6, 340);
+  }
+  return sheet;
+}
+
+function getOrCreateMilestonesSheet(ssOpt) {
+  var ss = ssOpt || getSpreadsheet_();
+  var sheet = ss.getSheetByName(SHEET_MILESTONES);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_MILESTONES);
+    sheet.appendRow(['Waktu', 'Project ID', 'Nama Anak', 'Judul Momen / Tumbuh Kembang', 'Usia / Tinggi / Berat', 'Catatan Orang Tua', 'Link Audio / Foto Drive', 'File ID']);
+    sheet.getRange('A1:H1').setFontWeight('bold').setBackground('#ead1dc');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getOrCreateAccessMonitorSheet_(ssOpt) {
+  var ss = ssOpt || getSpreadsheet_();
+  var sheet = ss.getSheetByName(SHEET_ACCESS_MONITOR);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_ACCESS_MONITOR);
+    sheet.appendRow([
+      'Project ID',
+      'Nama Customer',
+      'Tanggal Akses Terakhir (DD/MM/YYYY)',
+      'Jam Akses Terakhir (WIB)',
+      'Waktu Lengkap Akses Terakhir',
+      'Total Kunjungan',
+      'Aktivitas Terakhir',
+      'Status Portal Worksheet'
+    ]);
+    sheet.getRange('A1:H1').setFontWeight('bold').setBackground('#cfe2f3');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function readWorksheetPortalConfig_(projectId, altProjectId, personName, fallbackUrl) {
+  var result = {
+    unlocked: false,
+    status: 'TERKUNCI',
+    url: String(fallbackUrl || '').trim(),
+    title: 'Portal Worksheet & Latihan Interaktif',
+    note: 'Hubungi Admin Studio WYPHA untuk membuka akses Portal Worksheet.'
+  };
+  try {
+    var ss = getSpreadsheet_();
+    var lSheet = getOrCreateLockSheet(ss);
+    var rows = lSheet.getDataRange().getValues();
+    var candidates = [projectId, altProjectId, personName].map(function(x) { return String(x || '').trim().toLowerCase(); }).filter(Boolean);
+    for (var i = rows.length - 1; i >= 1; i--) {
+      var rowPid = String(rows[i][0] || '').trim().toLowerCase();
+      var rowCust = String(rows[i][1] || '').trim().toLowerCase();
+      if ((rowPid && candidates.indexOf(rowPid) !== -1) || (rowCust && candidates.indexOf(rowCust) !== -1)) {
+        var rawStatus = String(rows[i][11] || '').trim().toUpperCase();
+        var rawUrl = String(rows[i][12] || '').trim();
+        var isUnlocked = (rawStatus === 'TERBUKA' || rawStatus === 'BUKA' || rawStatus === 'UNLOCK' || rawStatus === 'OPEN' || rawStatus === 'AKTIF' || rawStatus === 'TRUE' || rawStatus === 'YA' || rawStatus === '1');
+        result.unlocked = isUnlocked;
+        result.status = isUnlocked ? 'TERBUKA' : 'TERKUNCI';
+        if (rawUrl) result.url = rawUrl;
+        break;
+      }
+    }
+  } catch (e) {}
+  return result;
+}
+
+function recordMicrositeAccess_(ssOpt, projectId, customerName, altProjectId, sourceAction) {
+  var parts = getWibTimestampParts_();
+  var out = { lastAccessedAt: parts.lengkap, tanggal: parts.tanggal, jam: parts.jam, totalAccess: 1 };
+  try {
+    var cleanPid = String(projectId || altProjectId || '').trim();
+    if (!cleanPid || cleanPid.toLowerCase() === 'default') return out;
+    var ss = ssOpt || getSpreadsheet_();
+    var cleanName = String(customerName || '').trim();
+    var target = cleanPid.toLowerCase();
+    var altTarget = String(altProjectId || '').trim().toLowerCase();
+
+    // 1. Update SHEET_LOCKS (Kolom G = Terakhir Diakses, Kolom H = Total Akses)
+    var lSheet = getOrCreateLockSheet(ss);
+    var lRows = lSheet.getDataRange().getValues();
+    var lRow = -1;
+    var portalStatus = 'TERKUNCI';
+    for (var i = lRows.length - 1; i >= 1; i--) {
+      var rPid = String(lRows[i][0] || '').trim().toLowerCase();
+      if (rPid === target || (altTarget && rPid === altTarget)) {
+        lRow = i + 1;
+        portalStatus = String(lRows[i][11] || 'TERKUNCI').trim().toUpperCase() || 'TERKUNCI';
+        break;
+      }
+    }
+    if (lRow > 0) {
+      var prevTotal = Number(lSheet.getRange(lRow, 8).getValue()) || 0;
+      var nextTotal = prevTotal + 1;
+      lSheet.getRange(lRow, 7, 1, 2).setValues([[parts.lengkap, nextTotal]]);
+      if (cleanName && !String(lSheet.getRange(lRow, 2).getValue() || '').trim()) {
+        lSheet.getRange(lRow, 2).setValue(cleanName);
+      }
+      out.totalAccess = nextTotal;
+    } else {
+      lSheet.appendRow([cleanPid, cleanName || cleanPid, '', '', 0, parts.lengkap, parts.lengkap, 1, false, 'BASIC_5', 0, 'TERKUNCI', '']);
+      try { lSheet.getRange(lSheet.getLastRow(), 9).insertCheckboxes(); } catch (e) {}
+      out.totalAccess = 1;
+    }
+
+    // 2. Update Monitor_Akses_Microsite (Tab Khusus Monitoring Tanggal, Bulan, Tahun & Jam)
+    var mSheet = getOrCreateAccessMonitorSheet_(ss);
+    var mRows = mSheet.getDataRange().getValues();
+    var mRow = -1;
+    for (var j = mRows.length - 1; j >= 1; j--) {
+      var mPid = String(mRows[j][0] || '').trim().toLowerCase();
+      if (mPid === target || (altTarget && mPid === altTarget)) {
+        mRow = j + 1;
+        break;
+      }
+    }
+    var actLabel = String(sourceAction || 'Buka Microsite').trim();
+    if (mRow > 0) {
+      var mPrev = Number(mSheet.getRange(mRow, 6).getValue()) || 0;
+      var mNext = Math.max(mPrev + 1, out.totalAccess);
+      mSheet.getRange(mRow, 2, 1, 7).setValues([[
+        cleanName || String(mSheet.getRange(mRow, 2).getValue() || cleanPid),
+        parts.tanggal,
+        parts.jam,
+        parts.lengkap,
+        mNext,
+        actLabel,
+        portalStatus
+      ]]);
+      out.totalAccess = mNext;
+    } else {
+      mSheet.appendRow([
+        cleanPid,
+        cleanName || cleanPid,
+        parts.tanggal,
+        parts.jam,
+        parts.lengkap,
+        out.totalAccess,
+        actLabel,
+        portalStatus
+      ]);
+    }
+  } catch (err) {}
+  return out;
+}
+
+function syncProjectToLegacyAndResetSheets_(projectId, customerName, owners, statusLabel, nowStr, remoteTierVal, noteStr, rejectedCountOpt) {
+  try {
+    var ss = getSpreadsheet_();
+    var legSheet = getOrCreateLegacyLockSheet(ss);
+    var legData = legSheet.getDataRange().getValues();
+    var target = String(projectId || '').trim().toLowerCase();
+    var foundRow = -1;
+    for (var i = legData.length - 1; i >= 1; i--) {
+      if (String(legData[i][0] || '').trim().toLowerCase() === target) {
+        foundRow = i + 1;
+        break;
+      }
+    }
+    var joinedOwners = (owners || []).join(' | ');
+    if (foundRow > 0) {
+      if (customerName) legSheet.getRange(foundRow, 2).setValue(customerName);
+      legSheet.getRange(foundRow, 3).setValue(joinedOwners);
+      legSheet.getRange(foundRow, 4).setValue(statusLabel);
+      legSheet.getRange(foundRow, 6).setValue(nowStr);
+      if (typeof rejectedCountOpt === 'number' && !isNaN(rejectedCountOpt)) {
+        var existingLegRej = Number(legSheet.getRange(foundRow, 7).getValue()) || 0;
+        var syncedLegRej = rejectedCountOpt === 0 ? 0 : Math.max(existingLegRej + 1, rejectedCountOpt);
+        legSheet.getRange(foundRow, 7).setValue(syncedLegRej);
+      }
+      if (noteStr) legSheet.getRange(foundRow, 8).setValue(noteStr);
+      if (remoteTierVal) legSheet.getRange(foundRow, 10).setValue(remoteTierVal);
+    } else {
+      legSheet.appendRow([
+        projectId,
+        customerName || projectId,
+        joinedOwners,
+        statusLabel,
+        nowStr,
+        nowStr,
+        (typeof rejectedCountOpt === 'number' && !isNaN(rejectedCountOpt)) ? rejectedCountOpt : 0,
+        noteStr || 'Tersinkron otomatis V43',
+        false,
+        remoteTierVal || 'BASIC_5'
+      ]);
+      try { legSheet.getRange(legSheet.getLastRow(), 9).insertCheckboxes(); } catch (e) {}
+    }
+
+    var rSheet = getOrCreateResetTabSheet(ss);
+    var rData = rSheet.getDataRange().getValues();
+    var rRow = -1;
+    for (var j = rData.length - 1; j >= 1; j--) {
+      if (String(rData[j][0] || '').trim().toLowerCase() === target) {
+        rRow = j + 1;
+        break;
+      }
+    }
+    if (rRow === -1) {
+      rSheet.appendRow([projectId, false, false, statusLabel + ' (' + nowStr + ')', 'Centang Kolom B untuk Reset 0/2 atau Kolom C untuk Hapus HP ke-2']);
+      try { rSheet.getRange(rSheet.getLastRow(), 2, 1, 2).insertCheckboxes(); } catch (e2) {}
+    } else {
+      rSheet.getRange(rRow, 4).setValue(statusLabel + ' (' + nowStr + ')');
+    }
+  } catch (err) {}
+}
+
+function performFullResetForProject_(projectId) {
+  var ss = getSpreadsheet_();
+  var nowStr = formatWibNow_();
+  var target = String(projectId || '').trim().toLowerCase();
+  try {
+    PropertiesService.getScriptProperties().deleteProperty('WYPHA_LOCK_' + projectId);
+  } catch (e) {}
+
+  var lSheet = getOrCreateLockSheet(ss);
+  var lData = lSheet.getDataRange().getValues();
+  for (var i = 1; i < lData.length; i++) {
+    if (String(lData[i][0] || '').trim().toLowerCase() === target) {
+      var r = i + 1;
+      lSheet.getRange(r, 3, 1, 3).setValues([['', '', 0]]);
+      lSheet.getRange(r, 7).setValue(nowStr);
+      lSheet.getRange(r, 9).setValue(false);
+      lSheet.getRange(r, 11).setValue(0);
+    }
+  }
+
+  var legSheet = getOrCreateLegacyLockSheet(ss);
+  var legData = legSheet.getDataRange().getValues();
+  for (var j = 1; j < legData.length; j++) {
+    if (String(legData[j][0] || '').trim().toLowerCase() === target) {
+      var lr = j + 1;
+      legSheet.getRange(lr, 3).setValue('');
+      legSheet.getRange(lr, 4).setValue('DIRESET (0/2 · SIAP KLAIM HP BARU)');
+      legSheet.getRange(lr, 6).setValue(nowStr);
+      legSheet.getRange(lr, 7).setValue(0);
+      legSheet.getRange(lr, 8).setValue('Direset penuh pada ' + nowStr);
+      legSheet.getRange(lr, 9).setValue(false);
+    }
+  }
+  SpreadsheetApp.flush();
+}
+
+function performRemoveSecondDeviceForProject_(projectId) {
+  var ss = getSpreadsheet_();
+  var nowStr = formatWibNow_();
+  var target = String(projectId || '').trim().toLowerCase();
+
+  var lSheet = getOrCreateLockSheet(ss);
+  var lData = lSheet.getDataRange().getValues();
+  var firstDev = '';
+  for (var i = 1; i < lData.length; i++) {
+    if (String(lData[i][0] || '').trim().toLowerCase() === target) {
+      var r = i + 1;
+      firstDev = String(lData[i][2] || '').trim().toUpperCase();
+      lSheet.getRange(r, 4, 1, 2).setValues([['', firstDev ? 1 : 0]]);
+      lSheet.getRange(r, 7).setValue(nowStr);
+      lSheet.getRange(r, 9).setValue(false);
+    }
+  }
+
+  var legSheet = getOrCreateLegacyLockSheet(ss);
+  var legData = legSheet.getDataRange().getValues();
+  for (var j = 1; j < legData.length; j++) {
+    if (String(legData[j][0] || '').trim().toLowerCase() === target) {
+      var lr = j + 1;
+      var owners = parseDeviceList_(legData[j][2]);
+      var keepFirst = firstDev || owners[0] || '';
+      legSheet.getRange(lr, 3).setValue(keepFirst);
+      legSheet.getRange(lr, 4).setValue(keepFirst ? 'TERKUNCI (1/2)' : 'DIRESET (0/2)');
+      legSheet.getRange(lr, 6).setValue(nowStr);
+      legSheet.getRange(lr, 8).setValue('HP ke-2 dihapus pada ' + nowStr + ' (Sisa Slot 1/2)');
+      legSheet.getRange(lr, 9).setValue(false);
+    }
+  }
+  try {
+    if (firstDev) PropertiesService.getScriptProperties().setProperty('WYPHA_LOCK_' + projectId, firstDev);
+  } catch (e) {}
+  SpreadsheetApp.flush();
+}
+
+// Menu Action 2: Reset Kunci Penuh (0/2) pada Baris yang Dipilih
+function resetSelectedRowLock() {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getActiveSheet();
+  var range = sheet.getActiveRange();
+  if (!range || range.getRow() < 2) {
+    SpreadsheetApp.getUi().alert('Pilih salah satu baris data Customer (baris ke-2 atau lebih) pada tab WyphaDeviceLocks, Daftar_Kunci_Perangkat, atau WyphaReset_Cepat terlebih dahulu.');
+    return;
+  }
+  var row = range.getRow();
+  var projId = String(sheet.getRange(row, 1).getValue() || '').trim();
+  var custName = String(sheet.getRange(row, 2).getValue() || '').trim();
+  if (!projId) {
+    SpreadsheetApp.getUi().alert('Baris yang dipilih tidak memiliki Project ID di Kolom A.');
+    return;
+  }
+  performFullResetForProject_(projId);
+  SpreadsheetApp.getUi().alert('✓ Kunci perangkat untuk "' + (custName || projId) + '" berhasil di-reset ke 0/2! Sekarang 2 perangkat baru dapat mengklaim kunci.');
+}
+
+// Menu Action 3: Hapus HP ke-2 Saja pada Baris yang Dipilih
+function removeSecondDeviceOnSelectedRow() {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getActiveSheet();
+  var range = sheet.getActiveRange();
+  if (!range || range.getRow() < 2) {
+    SpreadsheetApp.getUi().alert('Pilih salah satu baris data Customer (baris ke-2 atau lebih) terlebih dahulu.');
+    return;
+  }
+  var row = range.getRow();
+  var projId = String(sheet.getRange(row, 1).getValue() || '').trim();
+  if (!projId) {
+    SpreadsheetApp.getUi().alert('Baris yang dipilih tidak memiliki Project ID di Kolom A.');
+    return;
+  }
+  performRemoveSecondDeviceForProject_(projId);
+  SpreadsheetApp.getUi().alert('✓ HP ke-2 untuk Project ID "' + projId + '" berhasil dihapus! HP ke-1 tetap aktif (1/2) dan Slot 2/2 kini kosong.');
+}
+
+// Menu Action 4: Aktifkan Broadcast pada Baris Ini
+function activateBroadcastNow() {
+  var ss = getSpreadsheet_();
+  var bSheet = getOrCreateBroadcastSheet(ss);
+  var range = ss.getActiveSheet().getName() === SHEET_BROADCAST ? bSheet.getActiveRange() : null;
+  var row = (range && range.getRow() >= 2) ? range.getRow() : 2;
+  bSheet.getRange(row, 1).setValue('YA');
+  SpreadsheetApp.flush();
+  SpreadsheetApp.getUi().alert('✓ Broadcast pada baris ke-' + row + ' di tab WyphaBroadcast telah diaktifkan (YA)! Buka atau muat ulang microsite untuk melihat banner di bagian paling atas.');
+}
+
+// Menu Action 5: Tambah Baris Tes
+function setupSheetAndTest() {
+  setupAllWyphaSheets();
+  var res = handleRequest({
+    action: 'claim_or_verify',
+    projectId: 'TEST-CONNECTION-V43',
+    customerName: 'Uji Koneksi Tabel WYPHA V43 (Maks 2 HP)',
+    deviceId: 'W20-TEST-1111',
+    defaultRemoteTier: 'BASIC_5'
+  });
+  try {
+    SpreadsheetApp.getUi().alert('✓ Baris tes berhasil ditambahkan ke WyphaDeviceLocks, Daftar_Kunci_Perangkat & WyphaReset_Cepat!');
+  } catch (e) {}
+  return res;
+}
+
+// Menu Action 6: Reset Semua Kunci Perangkat
+function resetAllDeviceLocks() {
+  var ui = SpreadsheetApp.getUi();
+  var resp = ui.alert('Reset Semua Kunci?', 'Apakah Anda yakin ingin mereset semua kunci perangkat di tabel ini?', ui.ButtonSet.YES_NO);
+  if (resp !== ui.Button.YES) return;
+  try { PropertiesService.getScriptProperties().deleteAllProperties(); } catch (e) {}
+  var ss = getSpreadsheet_();
+  var lSheet = getOrCreateLockSheet(ss);
+  if (lSheet.getLastRow() >= 2) lSheet.getRange(2, 1, lSheet.getLastRow() - 1, Math.max(11, lSheet.getLastColumn())).clearContent();
+  var legSheet = getOrCreateLegacyLockSheet(ss);
+  if (legSheet.getLastRow() >= 2) legSheet.getRange(2, 1, legSheet.getLastRow() - 1, 10).clearContent();
+  ui.alert('✓ Seluruh data kunci perangkat telah dibersihkan.');
+}
+
+function getOrCreateClientFolder(folderName, parentFolderId) {
+  var rootFolder = null;
+  if (parentFolderId && String(parentFolderId).trim()) {
+    try { rootFolder = DriveApp.getFolderById(String(parentFolderId).trim()); } catch (e) { rootFolder = null; }
+  }
+  if (!rootFolder) {
+    var it = DriveApp.getFoldersByName(DEFAULT_ROOT_FOLDER_NAME);
+    rootFolder = it.hasNext() ? it.next() : DriveApp.createFolder(DEFAULT_ROOT_FOLDER_NAME);
+  }
+  var cleanSub = String(folderName || 'proyek-wypha').trim().replace(/[\\/:*?"<>|]+/g, '-') || 'proyek-wypha';
+  var subIt = rootFolder.getFoldersByName(cleanSub);
+  var clientFolder = subIt.hasNext() ? subIt.next() : rootFolder.createFolder(cleanSub);
+  try { clientFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  return clientFolder;
+}
+
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  var params = (e && e.parameter) ? e.parameter : {};
+  // Jika diakses via GET tanpa action & tanpa deviceId (misal tes URL di browser atau 302 redirect), jalankan sync_hub agar tidak error MISSING_DEVICE_ID!
+  if (!params.action && !params.deviceId) {
+    params.action = 'sync_hub';
+  }
+  return handleRequest(params);
+}
+
+function doPost(e) {
+  var body = {};
+  if (e && e.parameter) {
+    for (var k in e.parameter) {
+      body[k] = e.parameter[k];
+    }
+  }
+  try {
+    if (e && e.postData && e.postData.contents) {
+      var parsed = JSON.parse(e.postData.contents);
+      if (parsed && typeof parsed === 'object') {
+        for (var pk in parsed) {
+          body[pk] = parsed[pk];
+        }
+      }
+    }
+  } catch (err) {}
+  if (!body.action && !body.deviceId) {
+    body.action = 'sync_hub';
+  }
+  return handleRequest(body);
+}
+
+function isTargetProjectMatch_(sheetTargetRaw, candidates) {
+  var cleanTarget = String(sheetTargetRaw || '').trim().toLowerCase();
+  if (!cleanTarget || cleanTarget === 'all' || cleanTarget === 'semua' || cleanTarget === '*') {
+    return true;
+  }
+  for (var i = 0; i < candidates.length; i++) {
+    var c = String(candidates[i] || '').trim().toLowerCase();
+    if (!c) continue;
+    if (cleanTarget === c || cleanTarget.indexOf(c) !== -1 || c.indexOf(cleanTarget) !== -1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function readActiveBroadcast(projectId, altProjectId, personName) {
+  try {
+    var ss = getSpreadsheet_();
+    var bSheet = getOrCreateBroadcastSheet(ss);
+    var rows = bSheet.getDataRange().getValues();
+    var candidates = [projectId, altProjectId, personName];
+
+    // Cari dari baris paling bawah (terbaru) ke atas
+    for (var i = rows.length - 1; i >= 1; i--) {
+      var activeRaw = String(rows[i][0] || '').trim().toUpperCase();
+      var targetRaw = String(rows[i][1] || 'ALL').trim();
+      var titleStr = String(rows[i][2] || '').trim();
+      var msgStr = String(rows[i][3] || '').trim();
+      if (!titleStr && !msgStr) continue;
+
+      var isExplicitlyOff = (activeRaw === 'TIDAK' || activeRaw === 'NO' || activeRaw === 'OFF' || activeRaw === '0' || activeRaw === 'FALSE' || activeRaw === 'MATI');
+      var isExplicitlyOn = (activeRaw === 'YA' || activeRaw === 'YES' || activeRaw === 'ON' || activeRaw === '1' || activeRaw === 'TRUE' || activeRaw === 'AKTIF');
+      var hasSpecificProjectTarget = (targetRaw && targetRaw.toUpperCase() !== 'ALL' && targetRaw.toUpperCase() !== 'SEMUA');
+
+      // Jika diaktifkan (YA/ON/TRUE) ATAU Admin sudah mengisi ID Proyek spesifik di Kolom B (selama tidak dimatikan OFF)
+      if ((isExplicitlyOn || (hasSpecificProjectTarget && !isExplicitlyOff)) && isTargetProjectMatch_(targetRaw, candidates)) {
+        return {
+          active: true,
+          title: titleStr || 'Pengumuman Studio Wypha',
+          message: msgStr,
+          ctaLabel: String(rows[i][4] || 'Info Selengkapnya').trim(),
+          ctaUrl: String(rows[i][5] || '').trim()
+        };
+      }
+    }
+  } catch (e) {}
+  return { active: false };
+}
+
+function readRemoteTierForProject(projectId, fallbackDefaultTier, altProjectId, personName) {
+  try {
+    var ss = getSpreadsheet_();
+    var candidates = [projectId, altProjectId, personName].map(function(x) { return String(x || '').trim().toLowerCase(); }).filter(Boolean);
+
+    var lSheet = getOrCreateLockSheet(ss);
+    var rows = lSheet.getDataRange().getValues();
+    for (var i = rows.length - 1; i >= 1; i--) {
+      var rowPid = String(rows[i][0] || '').trim().toLowerCase();
+      var rowCust = String(rows[i][1] || '').trim().toLowerCase();
+      if ((rowPid && candidates.indexOf(rowPid) !== -1) || (rowCust && candidates.indexOf(rowCust) !== -1)) {
+        var val = String(rows[i][9] || '').trim();
+        if (val) return val;
+      }
+    }
+
+    var legSheet = getOrCreateLegacyLockSheet(ss);
+    var legRows = legSheet.getDataRange().getValues();
+    for (var j = legRows.length - 1; j >= 1; j--) {
+      var legPid = String(legRows[j][0] || '').trim().toLowerCase();
+      var legCust = String(legRows[j][1] || '').trim().toLowerCase();
+      if ((legPid && candidates.indexOf(legPid) !== -1) || (legCust && candidates.indexOf(legCust) !== -1)) {
+        var val2 = String(legRows[j][9] || '').trim();
+        if (val2) return val2;
+      }
+    }
+  } catch (e) {}
+  return String(fallbackDefaultTier || '').trim();
+}
+
+function upsertRemoteTierForProject(projectId, tierCode, customerName, nowStr) {
+  var ss = getSpreadsheet_();
+  var lSheet = getOrCreateLockSheet(ss);
+  var rows = lSheet.getDataRange().getValues();
+  var targetProj = String(projectId || '').trim().toLowerCase();
+  var foundRow = -1;
+  for (var i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][0] || '').trim().toLowerCase() === targetProj) {
+      foundRow = i + 1;
+      break;
+    }
+  }
+  var cleanTier = String(tierCode || 'BASIC_5').trim();
+  if (foundRow > 0) {
+    lSheet.getRange(foundRow, 10).setValue(cleanTier);
+  } else {
+    lSheet.appendRow([projectId, customerName || projectId, '', '', 0, nowStr, nowStr, 0, false, cleanTier, 0]);
+    try { lSheet.getRange(lSheet.getLastRow(), 9).insertCheckboxes(); } catch (e) {}
+  }
+  return cleanTier;
+}
+
+function handleRequest(body) {
+  body = (body && typeof body === 'object') ? body : {};
+  var action = String(body.action || (body.deviceId ? 'claim_or_verify' : 'sync_hub')).trim();
+  var projectId = String(body.projectId || body.folder || 'wypha').trim();
+  var altProjectId = String(body.altProjectId || '').trim();
+  var personName = String(body.personName || body.customerName || '').trim();
+  var nowStr = formatWibNow_();
+
+  // --- 1. PING CLOUD ---
+  if (action === 'ping_cloud') {
+    setupAllWyphaSheets();
+    return jsonResponse({
+      ok: true,
+      version: 'V40-ALL-IN-ONE',
+      scriptVersion: 'V43',
+      provider: 'gdrive',
+      mode: 'GOOGLE_DRIVE_AND_SHEETS_V40_ACTIVE',
+      message: 'Koneksi Google Apps Script All-in-One V40 aktif (Menu Reset, Tab Reset Cepat, Broadcast & Drive siap digunakan)!'
+    });
+  }
+
+  // --- 1B. SET REMOTE TIER DIRECTLY FROM STUDIO ---
+  if (action === 'set_remote_tier') {
+    var lockTier = LockService.getScriptLock();
+    lockTier.waitLock(10000);
+    try {
+      var updatedTier = upsertRemoteTierForProject(projectId, body.remoteTier || body.defaultRemoteTier || 'BASIC_5', personName, nowStr);
+      return jsonResponse({
+        ok: true,
+        scriptVersion: 'V43',
+        projectId: projectId,
+        remoteTier: updatedTier,
+        message: 'Kolom J di WyphaDeviceLocks berhasil diupdate ke paket: ' + updatedTier
+      });
+    } finally {
+      lockTier.releaseLock();
+    }
+  }
+
+  // --- 2. UPLOAD FOTO / ASET KE GOOGLE DRIVE ---
+  if (action === 'upload_photo') {
+    try {
+      if (OPTIONAL_UPLOAD_TOKEN && String(body.token || '').trim() !== OPTIONAL_UPLOAD_TOKEN) {
+        return jsonResponse({ ok: false, error: 'INVALID_UPLOAD_TOKEN', message: 'Token keamanan upload tidak sesuai.' });
+      }
+      var dataUrl = String(body.dataUrl || '');
+      var match = dataUrl.match(/^data:([^;,]+)?;base64,(.+)$/i);
+      if (!match) return jsonResponse({ ok: false, error: 'INVALID_DATA_URL', message: 'Format dataUrl Base64 tidak valid.' });
+      var mimeType = match[1] || 'image/webp';
+      var bytes = Utilities.base64Decode(match[2]);
+      var fileName = String(body.fileName || ('foto-' + new Date().getTime() + '.webp')).trim();
+      var folderName = String(body.folder || projectId || 'proyek-wypha').trim();
+      var folder = getOrCreateClientFolder(folderName, String(body.parentFolderId || '').trim());
+      var file = folder.createFile(Utilities.newBlob(bytes, mimeType, fileName));
+      try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+      var fileId = file.getId();
+      var thumbUrl = 'https://lh3.googleusercontent.com/d/' + fileId + '=w1600';
+      var directViewUrl = 'https://drive.google.com/uc?export=view&id=' + fileId;
+      return jsonResponse({
+        ok: true,
+        provider: 'gdrive',
+        fileId: fileId,
+        fileName: file.getName(),
+        folderName: folder.getName(),
+        url: thumbUrl,
+        thumbnailUrl: thumbUrl,
+        driveViewUrl: directViewUrl
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  // --- 2B. PING ACCESS MONITOR (Catat Tanggal, Bulan, Tahun & Jam Akses Terakhir) ---
+  if (action === 'ping_access') {
+    var ssPing = getSpreadsheet_();
+    var accessInfoPing = recordMicrositeAccess_(ssPing, projectId, personName || body.customerName, altProjectId, body.accessSource || 'Buka Microsite');
+    var wsPortalPing = readWorksheetPortalConfig_(projectId, altProjectId, personName, body.defaultWorksheetUrl);
+    return jsonResponse({
+      ok: true,
+      scriptVersion: 'V43',
+      projectId: projectId,
+      lastAccessedAt: accessInfoPing.lastAccessedAt,
+      lastAccessedDate: accessInfoPing.tanggal,
+      lastAccessedTime: accessInfoPing.jam,
+      totalAccess: accessInfoPing.totalAccess,
+      worksheetPortal: wsPortalPing
+    });
+  }
+
+  // --- 2D. VERIFY WORKSHEET ACCESS (Proteksi Customer Tingkat 2: Project ID + Status TERBUKA + Kunci 2-HP) ---
+  if (action === 'verify_worksheet_access') {
+    var lockWs = LockService.getScriptLock();
+    lockWs.waitLock(10000);
+    try {
+      var ssV = getSpreadsheet_();
+      var lSheetV = getOrCreateLockSheet(ssV);
+      var rowsV = lSheetV.getDataRange().getValues();
+      var pidV = String(projectId || '').trim();
+      var devV = String(body.deviceId || '').trim().toUpperCase();
+      var custV = String(body.customerName || personName || '').trim();
+
+      if (!pidV || pidV.toLowerCase() === 'default') {
+        return jsonResponse({
+          ok: true, scriptVersion: 'V43', allowed: false,
+          reason: 'PROJECT_REQUIRED',
+          message: 'Masukkan Kode Proyek (Project ID) customer Anda terlebih dahulu.'
+        });
+      }
+
+      var targetV = pidV.toLowerCase();
+      var foundV = -1;
+      for (var iv = rowsV.length - 1; iv >= 1; iv--) {
+        if (String(rowsV[iv][0] || '').trim().toLowerCase() === targetV) {
+          foundV = iv + 1;
+          break;
+        }
+      }
+
+      if (foundV === -1) {
+        return jsonResponse({
+          ok: true, scriptVersion: 'V43', allowed: false,
+          reason: 'PROJECT_NOT_FOUND',
+          message: 'Kode Proyek "' + pidV + '" tidak ditemukan. Pastikan kode dari Studio WYPHA benar.'
+        });
+      }
+
+      var rowV = lSheetV.getRange(foundV, 1, 1, 13).getValues()[0];
+      var rawPortalStatus = String(rowV[11] || '').trim().toUpperCase();
+      var isPortalOpen = (rawPortalStatus === 'TERBUKA' || rawPortalStatus === 'BUKA' || rawPortalStatus === 'UNLOCK' || rawPortalStatus === 'OPEN' || rawPortalStatus === 'AKTIF' || rawPortalStatus === 'TRUE' || rawPortalStatus === 'YA' || rawPortalStatus === '1');
+      if (!isPortalOpen) {
+        return jsonResponse({
+          ok: true, scriptVersion: 'V43', allowed: false,
+          reason: 'PORTAL_LOCKED',
+          status: 'TERKUNCI',
+          message: 'Akses Portal Worksheet untuk proyek ini sedang terkunci. Hubungi Admin Studio WYPHA untuk mengaktifkan.'
+        });
+      }
+
+      // Cek & terapkan Kunci Maksimal 2 HP (Kolom C & D)
+      var resetV = String(rowV[8] || '').trim().toUpperCase();
+      var d1 = String(rowV[2] || '').trim().toUpperCase();
+      var d2 = String(rowV[3] || '').trim().toUpperCase();
+      if (resetV === 'RESET' || resetV === 'YA' || resetV === '1' || resetV === 'TRUE') {
+        d1 = ''; d2 = '';
+        lSheetV.getRange(foundV, 9).setValue(false);
+        lSheetV.getRange(foundV, 11).setValue(0);
+      }
+      var ownersV = [d1, d2].filter(Boolean);
+      if (devV) {
+        if (ownersV.indexOf(devV) === -1) {
+          if (ownersV.length < MAX_DEVICES) {
+            ownersV.push(devV);
+            lSheetV.getRange(foundV, 3, 1, 3).setValues([[ownersV[0] || '', ownersV[1] || '', ownersV.length]]);
+          } else {
+            var rejCount = (Number(rowV[10]) || 0) + 1;
+            lSheetV.getRange(foundV, 11).setValue(rejCount);
+            return jsonResponse({
+              ok: true, scriptVersion: 'V43', allowed: false,
+              reason: 'MAX_DEVICES_REACHED',
+              usedSlots: ownersV.length, maxDevices: MAX_DEVICES,
+              message: 'Batas maksimal 2 HP sudah terpakai untuk kode proyek ini. Akses perangkat ke-3 ditolak.'
+            });
+          }
+        }
+      }
+
+      var accInfoV = recordMicrositeAccess_(ssV, pidV, custV || String(rowV[1] || pidV), altProjectId, 'Buka Portal Worksheet');
+      return jsonResponse({
+        ok: true, scriptVersion: 'V43', allowed: true,
+        status: 'TERBUKA',
+        projectId: pidV,
+        customerName: String(rowV[1] || custV || pidV),
+        usedSlots: ownersV.length,
+        maxDevices: MAX_DEVICES,
+        lastAccessedAt: accInfoV.lastAccessedAt
+      });
+    } finally {
+      lockWs.releaseLock();
+    }
+  }
+
+  // --- 2C. SET WORKSHEET PORTAL REMOTE (Kunci / Buka Bingkai Link Worksheet) ---
+  if (action === 'set_worksheet_portal') {
+    var ssWs = getSpreadsheet_();
+    var lSheetWs = getOrCreateLockSheet(ssWs);
+    var lRowsWs = lSheetWs.getDataRange().getValues();
+    var targetWs = projectId.toLowerCase();
+    var foundWs = -1;
+    for (var iw = lRowsWs.length - 1; iw >= 1; iw--) {
+      if (String(lRowsWs[iw][0] || '').trim().toLowerCase() === targetWs) {
+        foundWs = iw + 1;
+        break;
+      }
+    }
+    var newWsStatus = (String(body.status || '').trim().toUpperCase() === 'TERBUKA' || body.unlocked === true) ? 'TERBUKA' : 'TERKUNCI';
+    var newWsUrl = String(body.url || '').trim();
+    if (foundWs > 0) {
+      lSheetWs.getRange(foundWs, 12).setValue(newWsStatus);
+      if (newWsUrl) lSheetWs.getRange(foundWs, 13).setValue(newWsUrl);
+    } else {
+      lSheetWs.appendRow([projectId, personName || projectId, '', '', 0, nowStr, nowStr, 0, false, 'BASIC_5', 0, newWsStatus, newWsUrl]);
+    }
+    return jsonResponse({
+      ok: true,
+      scriptVersion: 'V43',
+      projectId: projectId,
+      worksheetPortal: { unlocked: newWsStatus === 'TERBUKA', status: newWsStatus, url: newWsUrl }
+    });
+  }
+
+  // --- 3. SYNC HUB (Remote Tier Unlocker + Broadcast + Guestbook + Leaderboard + Milestones) ---
+  if (action === 'sync_hub') {
+    var ss = getSpreadsheet_();
+    var accessLogSync = recordMicrositeAccess_(ss, projectId, personName || body.customerName, altProjectId, body.accessSource || 'Sync Microsite');
+    var worksheetPortal = readWorksheetPortalConfig_(projectId, altProjectId, personName, body.defaultWorksheetUrl);
+    var incomingDefaultTier = String(body.defaultRemoteTier || '').trim();
+    if (body.forceSyncTier && incomingDefaultTier) {
+      upsertRemoteTierForProject(projectId, incomingDefaultTier, personName, nowStr);
+    }
+    var remoteTier = readRemoteTierForProject(projectId, incomingDefaultTier, altProjectId, personName);
+    var broadcast = readActiveBroadcast(projectId, altProjectId, personName);
+
+    var gbSheet = getOrCreateGuestbookSheet(ss);
+    var gbRows = gbSheet.getDataRange().getValues();
+    var guestbook = [];
+    for (var i = gbRows.length - 1; i >= 1 && guestbook.length < 30; i--) {
+      if (isTargetProjectMatch_(gbRows[i][1], [projectId, altProjectId]) && String(gbRows[i][6] || 'TAMPIL').trim().toUpperCase() !== 'HAPUS') {
+        guestbook.push({
+          timestamp: String(gbRows[i][0] || ''),
+          sender: String(gbRows[i][2] || 'Keluarga'),
+          relation: String(gbRows[i][3] || 'Kerabat'),
+          message: String(gbRows[i][4] || ''),
+          emoji: String(gbRows[i][5] || '🤲')
+        });
+      }
+    }
+
+    var lbSheet = getOrCreateLeaderboardSheet(ss);
+    var lbRows = lbSheet.getDataRange().getValues();
+    var leaderboard = [];
+    for (var j = 1; j < lbRows.length; j++) {
+      if (String(lbRows[j][1] || '').trim()) {
+        leaderboard.push({
+          projectId: String(lbRows[j][0] || ''),
+          childName: String(lbRows[j][1] || 'Anak Hebat'),
+          totalStars: Number(lbRows[j][2]) || 0,
+          badgesCount: Number(lbRows[j][3]) || 0,
+          avgScore: Number(lbRows[j][4]) || 0,
+          lastGame: String(lbRows[j][5] || ''),
+          updatedAt: String(lbRows[j][6] || '')
+        });
+      }
+    }
+    leaderboard.sort(function(a, b) { return (b.totalStars - a.totalStars) || (b.avgScore - a.avgScore); });
+
+    var msSheet = getOrCreateMilestonesSheet(ss);
+    var msRows = msSheet.getDataRange().getValues();
+    var milestones = [];
+    for (var m = msRows.length - 1; m >= 1 && milestones.length < 25; m--) {
+      if (isTargetProjectMatch_(msRows[m][1], [projectId, altProjectId])) {
+        milestones.push({
+          timestamp: String(msRows[m][0] || ''),
+          childName: String(msRows[m][2] || ''),
+          title: String(msRows[m][3] || ''),
+          metrics: String(msRows[m][4] || ''),
+          note: String(msRows[m][5] || ''),
+          mediaUrl: String(msRows[m][6] || '')
+        });
+      }
+    }
+
+    var chSheet = getOrCreateCurhatSheet(ss);
+    var chRows = chSheet.getDataRange().getValues();
+    var curhat = [];
+    for (var k = chRows.length - 1; k >= 1 && curhat.length < 30; k--) {
+      if (isTargetProjectMatch_(chRows[k][1], [projectId, altProjectId]) && String(chRows[k][7] || 'TAMPIL').trim().toUpperCase() !== 'HAPUS') {
+        curhat.push({
+          timestamp: String(chRows[k][0] || ''),
+          projectId: String(chRows[k][1] || ''),
+          sender: String(chRows[k][2] || 'Customer'),
+          topic: String(chRows[k][3] || '💭 Curahan Hati'),
+          message: String(chRows[k][4] || ''),
+          adminReply: String(chRows[k][5] || ''),
+          replyTime: String(chRows[k][6] || '')
+        });
+      }
+    }
+
+    return jsonResponse({
+      ok: true,
+      scriptVersion: 'V43',
+      projectId: projectId,
+      remoteTier: remoteTier,
+      broadcast: broadcast,
+      worksheetPortal: worksheetPortal,
+      lastAccessedAt: accessLogSync.lastAccessedAt,
+      lastAccessedDate: accessLogSync.tanggal,
+      lastAccessedTime: accessLogSync.jam,
+      totalAccess: accessLogSync.totalAccess,
+      guestbook: guestbook,
+      curhat: curhat,
+      leaderboard: leaderboard.slice(0, 20),
+      milestones: milestones
+    });
+  }
+
+  // --- 4. AUTO-BACKUP & RESTORE PROGRES PINDAH HP 1-KLIK ---
+  if (action === 'backup_progress') {
+    try {
+      var folderB = getOrCreateClientFolder(projectId, '');
+      var backupFileName = 'wypha-cloud-backup-' + projectId.replace(/[^a-zA-Z0-9_-]+/g, '-') + '.json';
+      var payloadStr = typeof body.backupData === 'string' ? body.backupData : JSON.stringify(body.backupData || {});
+      var existing = folderB.getFilesByName(backupFileName);
+      var fileB = null;
+      if (existing.hasNext()) {
+        fileB = existing.next();
+        fileB.setContent(payloadStr);
+      } else {
+        fileB = folderB.createFile(backupFileName, payloadStr, MimeType.PLAIN_TEXT);
+      }
+      return jsonResponse({
+        ok: true,
+        projectId: projectId,
+        fileId: fileB.getId(),
+        savedAt: nowStr,
+        message: 'Progres berhasil dicadangkan ke Google Drive (' + backupFileName + ')!'
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  if (action === 'restore_progress') {
+    try {
+      var folderR = getOrCreateClientFolder(projectId, '');
+      var backupFileNameR = 'wypha-cloud-backup-' + projectId.replace(/[^a-zA-Z0-9_-]+/g, '-') + '.json';
+      var existingR = folderR.getFilesByName(backupFileNameR);
+      if (!existingR.hasNext()) {
+        return jsonResponse({ ok: false, error: 'NO_BACKUP_FOUND', message: 'Belum ada cadangan progres di Google Drive untuk proyek ini.' });
+      }
+      var fileR = existingR.next();
+      var rawJson = fileR.getBlob().getDataAsString('UTF-8');
+      return jsonResponse({
+        ok: true,
+        projectId: projectId,
+        backupData: JSON.parse(rawJson),
+        updatedAt: Utilities.formatDate(fileR.getLastUpdated(), 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss')
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  // --- 5A. KOLOM CURAHAN HATI & BALASAN 2-ARAH WYPHA PRINTLAB (TAB WyphaCurhat) ---
+  if (action === 'post_curhat') {
+    var chSender = String(body.sender || personName || 'Customer Wypha').trim().slice(0, 80);
+    var chTopic = String(body.topic || '💭 Curahan Hati & Pesan Privat').trim().slice(0, 80);
+    var chMsg = String(body.message || '').trim().slice(0, 1200);
+    if (!chMsg) return jsonResponse({ ok: false, error: 'EMPTY_MESSAGE', message: 'Tulis isi curahan hati terlebih dahulu.' });
+    var chSheetP = getOrCreateCurhatSheet();
+    chSheetP.appendRow([nowStr, projectId, chSender, chTopic, chMsg, '', '', 'TAMPIL']);
+    return jsonResponse({
+      ok: true,
+      scriptVersion: 'V43',
+      entry: {
+        timestamp: nowStr,
+        projectId: projectId,
+        sender: chSender,
+        topic: chTopic,
+        message: chMsg,
+        adminReply: '',
+        replyTime: ''
+      }
+    });
+  }
+
+  // --- 5B. HAPUS PESAN DINDING DOA (delete_guestbook) & KOLOM CURHAT (delete_curhat) ---
+  if (action === 'delete_guestbook') {
+    var delGbSheet = getOrCreateGuestbookSheet();
+    var delGbRows = delGbSheet.getDataRange().getValues();
+    var targetTs = String(body.timestamp || '').trim();
+    var targetSender = String(body.sender || '').trim();
+    var targetMsg = String(body.message || '').trim();
+    var deletedGbCount = 0;
+    for (var gIdx = delGbRows.length - 1; gIdx >= 1; gIdx--) {
+      var rTs = String(delGbRows[gIdx][0] || '').trim();
+      var rSend = String(delGbRows[gIdx][2] || '').trim();
+      var rMsg = String(delGbRows[gIdx][4] || '').trim();
+      if ((targetTs && rTs === targetTs) || (targetMsg && rMsg === targetMsg && (!targetSender || rSend === targetSender))) {
+        delGbSheet.getRange(gIdx + 1, 6).setValue('HAPUS');
+        deletedGbCount++;
+        break;
+      }
+    }
+    return jsonResponse({ ok: true, scriptVersion: 'V43', deleted: deletedGbCount });
+  }
+
+  if (action === 'delete_curhat') {
+    var delChSheet = getOrCreateCurhatSheet();
+    var delChRows = delChSheet.getDataRange().getValues();
+    var targetChTs = String(body.timestamp || '').trim();
+    var targetChSender = String(body.sender || '').trim();
+    var targetChMsg = String(body.message || '').trim();
+    var deletedChCount = 0;
+    for (var cIdx = delChRows.length - 1; cIdx >= 1; cIdx--) {
+      var cTs = String(delChRows[cIdx][0] || '').trim();
+      var cSend = String(delChRows[cIdx][2] || '').trim();
+      var cMsg = String(delChRows[cIdx][4] || '').trim();
+      if ((targetChTs && cTs === targetChTs) || (targetChMsg && cMsg === targetChMsg && (!targetChSender || cSend === targetChSender))) {
+        delChSheet.getRange(cIdx + 1, 8).setValue('HAPUS');
+        deletedChCount++;
+        break;
+      }
+    }
+    return jsonResponse({ ok: true, scriptVersion: 'V43', deleted: deletedChCount });
+  }
+
+  // --- 5. DINDING DOA & BUKU TAMU KELUARGA LIVE (GUESTBOOK) ---
+  if (action === 'post_guestbook') {
+    var sender = String(body.sender || 'Keluarga Tercinta').trim().slice(0, 80);
+    var relation = String(body.relation || 'Kerabat').trim().slice(0, 60);
+    var message = String(body.message || '').trim().slice(0, 500);
+    var emoji = String(body.emoji || '🤲').trim().slice(0, 10);
+    if (!message) return jsonResponse({ ok: false, error: 'EMPTY_MESSAGE', message: 'Tulis ucapan atau doa terlebih dahulu.' });
+    var gbSheetP = getOrCreateGuestbookSheet();
+    gbSheetP.appendRow([nowStr, projectId, sender, relation, message, emoji, 'TAMPIL']);
+    return jsonResponse({
+      ok: true,
+      entry: { timestamp: nowStr, sender: sender, relation: relation, message: message, emoji: emoji }
+    });
+  }
+
+  // --- 6. KIRIM E-RAPORT OTOMATIS KE EMAIL ORANG TUA (MAILAPP) ---
+  if (action === 'send_eraport_email') {
+    try {
+      var parentEmail = String(body.parentEmail || '').trim();
+      if (!parentEmail || parentEmail.indexOf('@') === -1) {
+        return jsonResponse({ ok: false, error: 'INVALID_EMAIL', message: 'Alamat email orang tua tidak valid.' });
+      }
+      var childName = String(body.childName || 'Ananda Tercinta').trim();
+      var totalStars = Number(body.totalStars) || 0;
+      var badgesCount = Number(body.badgesCount) || 0;
+      var avgScore = body.avgScore !== null && body.avgScore !== undefined ? body.avgScore : '—';
+      var doneChapters = Number(body.doneChapters) || 0;
+      var totalBooks = Number(body.totalBooks) || 0;
+      var parentNote = String(body.parentNote || 'Terus semangat belajar dan mengaji setiap hari!').trim();
+      var topGamesSummary = String(body.topGamesSummary || '45 Game Edukasi & Mengaji Interaktif').trim();
+
+      var subject = '📊 Laporan E-Raport & Capaian Belajar ' + childName + ' — WYPHA Smart E-Book & 45 Edu-Games';
+      var htmlBody =
+        '<div style="font-family:system-ui,-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:24px;border-radius:18px;background:#071326;color:#f0f9ff;border:2px solid #00d2ff">' +
+          '<h2 style="margin:0 0 6px;color:#ffd460">👑 Laporan Perkembangan Belajar & Mengaji Anak</h2>' +
+          '<p style="margin:0 0 16px;color:#9ef6ff;font-size:13px">Dikirim otomatis dari Microsite Pintar WYPHA Studio V40 · ' + nowStr + '</p>' +
+          '<div style="padding:16px;border-radius:14px;background:#0d213f;border:1px solid rgba(110,243,255,.3);margin-bottom:16px">' +
+            '<p style="margin:4px 0">👤 <strong>Nama Anak:</strong> ' + childName + '</p>' +
+            '<p style="margin:4px 0">⭐ <strong>Total Bintang Diraih:</strong> ' + totalStars + ' Bintang</p>' +
+            '<p style="margin:4px 0">🏅 <strong>Lencana Prestasi Terbuka:</strong> ' + badgesCount + ' Lencana</p>' +
+            '<p style="margin:4px 0">📊 <strong>Nilai Rata-rata Evaluasi Game:</strong> ' + avgScore + ' / 100</p>' +
+            '<p style="margin:4px 0">📘 <strong>Progres Perpustakaan 3D:</strong> ' + doneChapters + ' Bab Selesai (' + totalBooks + ' E-Book)</p>' +
+          '</div>' +
+          '<div style="padding:14px;border-radius:12px;background:rgba(16,185,129,.15);border:1px solid #34d399;margin-bottom:14px">' +
+            '<strong style="color:#6ee7b7;display:block;margin-bottom:4px">🎮 Rincian Aktivitas Game Terakhir:</strong>' +
+            '<div style="font-size:13px;color:#d1fae5;white-space:pre-line">' + topGamesSummary + '</div>' +
+          '</div>' +
+          '<div style="padding:14px;border-radius:12px;background:rgba(245,158,11,.15);border:1px solid #fbbf24">' +
+            '<strong style="color:#fde68a;display:block;margin-bottom:4px">💌 Catatan & Apresiasi Orang Tua:</strong>' +
+            '<div style="font-size:13px;color:#fef3c7">' + parentNote + '</div>' +
+          '</div>' +
+        '</div>';
+
+      MailApp.sendEmail({
+        to: parentEmail,
+        subject: subject,
+        htmlBody: htmlBody
+      });
+      return jsonResponse({
+        ok: true,
+        sentTo: parentEmail,
+        sentAt: nowStr,
+        message: 'Laporan E-Raport ' + childName + ' berhasil dikirim ke email ' + parentEmail + '!'
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  // --- 7. PAPAN PERINGKAT BINTANG KOMUNITAS / SEKOLAH (LEADERBOARD) ---
+  if (action === 'submit_leaderboard') {
+    var lbSheetS = getOrCreateLeaderboardSheet();
+    var childNameL = String(body.childName || 'Sobat Wypha').trim().slice(0, 60);
+    var totalStarsL = Number(body.totalStars) || 0;
+    var badgesCountL = Number(body.badgesCount) || 0;
+    var avgScoreL = Number(body.avgScore) || 0;
+    var lastGameL = String(body.lastGame || '45 Edu-Games').trim().slice(0, 80);
+
+    var rowsL = lbSheetS.getDataRange().getValues();
+    var foundRowL = -1;
+    for (var k = 1; k < rowsL.length; k++) {
+      if (String(rowsL[k][0] || '').trim() === projectId && String(rowsL[k][1] || '').trim().toLowerCase() === childNameL.toLowerCase()) {
+        foundRowL = k + 1;
+        break;
+      }
+    }
+    if (foundRowL > 0) {
+      lbSheetS.getRange(foundRowL, 3, 1, 5).setValues([[totalStarsL, badgesCountL, avgScoreL, lastGameL, nowStr]]);
+    } else {
+      lbSheetS.appendRow([projectId, childNameL, totalStarsL, badgesCountL, avgScoreL, lastGameL, nowStr]);
+    }
+    return handleRequest({ action: 'sync_hub', projectId: projectId, altProjectId: altProjectId, personName: personName });
+  }
+
+  // --- 8. REKAMAN SUARA ANAK & JURNAL TUMBUH KEMBANG CLOUD DRIVE ---
+  if (action === 'upload_voice_or_milestone') {
+    try {
+      var childNameM = String(body.childName || 'Sobat Wypha').trim().slice(0, 80);
+      var titleM = String(body.title || 'Momen Tumbuh Kembang & Mengaji').trim().slice(0, 120);
+      var metricsM = String(body.metrics || '').trim().slice(0, 100);
+      var noteM = String(body.note || '').trim().slice(0, 500);
+      var mediaUrlM = '';
+      var fileIdM = '';
+
+      if (body.audioDataUrl && String(body.audioDataUrl).indexOf('base64,') !== -1) {
+        var parts = String(body.audioDataUrl).split('base64,');
+        var mime = (parts[0].match(/data:([^;]+)/) || [null, 'audio/webm'])[1];
+        var ext = mime.indexOf('mp4') !== -1 ? '.m4a' : (mime.indexOf('mpeg') !== -1 ? '.mp3' : '.webm');
+        var bytesM = Utilities.base64Decode(parts[1]);
+        var folderM = getOrCreateClientFolder(projectId, '');
+        var fName = 'rekaman-' + new Date().getTime() + ext;
+        var fileM = folderM.createFile(Utilities.newBlob(bytesM, mime, fName));
+        try { fileM.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+        fileIdM = fileM.getId();
+        mediaUrlM = 'https://drive.google.com/uc?export=download&id=' + fileIdM;
+      }
+
+      var msSheetM = getOrCreateMilestonesSheet();
+      msSheetM.appendRow([nowStr, projectId, childNameM, titleM, metricsM, noteM, mediaUrlM, fileIdM]);
+      return jsonResponse({
+        ok: true,
+        entry: { timestamp: nowStr, childName: childNameM, title: titleM, metrics: metricsM, note: noteM, mediaUrl: mediaUrlM }
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: String(err.message || err) });
+    }
+  }
+
+  // --- 9. KLAIM KUNCI MAKSIMAL 2 PERANGKAT + REMOTE TIER SYNC ---
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var ss = getSpreadsheet_();
+    var sheet = getOrCreateLockSheet(ss);
+    var customerName = String(body.customerName || personName || '').trim();
+    var deviceId = String(body.deviceId || '').trim().toUpperCase();
+    var defaultTier = String(body.defaultRemoteTier || 'BASIC_5').trim();
+
+    if (action === 'reset') {
+      performFullResetForProject_(projectId);
+      return jsonResponse({ ok: true, scriptVersion: 'V43', status: 'RESET_SUCCESS', projectId: projectId, maxDevices: MAX_DEVICES, usedSlots: 0, ownerDeviceIds: [] });
+    }
+
+    if (!deviceId) {
+      return jsonResponse({
+        ok: true,
+        scriptVersion: 'V43',
+        projectId: projectId,
+        remoteTier: readRemoteTierForProject(projectId, defaultTier, altProjectId, personName),
+        broadcast: readActiveBroadcast(projectId, altProjectId, personName)
+      });
+    }
+
+    var data = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+    var targetProj = projectId.toLowerCase();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (String(data[i][0] || '').trim().toLowerCase() === targetProj) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      sheet.appendRow([projectId, customerName || projectId, deviceId, '', 1, nowStr, nowStr, 1, false, defaultTier, 0]);
+      try { sheet.getRange(sheet.getLastRow(), 9).insertCheckboxes(); } catch (e) {}
+      syncProjectToLegacyAndResetSheets_(projectId, customerName || projectId, [deviceId], 'TERKUNCI (1/2)', nowStr, defaultTier, 'Klaim Slot 1/2 (HP ke-1 Aktif)');
+      return jsonResponse({
+        ok: true,
+        scriptVersion: 'V43',
+        status: 'CLAIMED_SLOT_1_OF_2',
+        slot: 1,
+        maxDevices: MAX_DEVICES,
+        usedSlots: 1,
+        ownerDeviceIds: [deviceId],
+        ownerDeviceId: deviceId,
+        remoteTier: defaultTier,
+        broadcast: readActiveBroadcast(projectId, altProjectId, personName)
+      });
+    }
+
+    var rowVals = sheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
+    var resetCmd = String(rowVals[8] || '').trim().toUpperCase();
+    var remoteTierVal = String(rowVals[9] || '').trim();
+    if ((!remoteTierVal || body.forceSyncTier) && defaultTier) {
+      remoteTierVal = defaultTier;
+      sheet.getRange(rowIndex, 10).setValue(defaultTier);
+    }
+    var dev1 = String(rowVals[2] || '').trim().toUpperCase();
+    var dev2 = String(rowVals[3] || '').trim().toUpperCase();
+
+    if (resetCmd === 'RESET' || resetCmd === 'YA' || resetCmd === '1' || resetCmd === 'TRUE') {
+      dev1 = '';
+      dev2 = '';
+      sheet.getRange(rowIndex, 9).setValue(false);
+      sheet.getRange(rowIndex, 11).setValue(0);
+    }
+
+    var owners = [dev1, dev2].filter(Boolean);
+    var visits = (Number(rowVals[7]) || 0) + 1;
+    if (customerName && !String(rowVals[1] || '').trim()) {
+      sheet.getRange(rowIndex, 2).setValue(customerName);
+    }
+
+    if (owners.indexOf(deviceId) !== -1) {
+      sheet.getRange(rowIndex, 7, 1, 2).setValues([[nowStr, visits]]);
+      syncProjectToLegacyAndResetSheets_(projectId, customerName || String(rowVals[1] || projectId), owners, owners.length >= 2 ? 'TERKUNCI PENUH (2/2)' : 'TERKUNCI (1/2)', nowStr, remoteTierVal, 'Verifikasi Ulang HP ke-' + (owners.indexOf(deviceId) + 1));
+      return jsonResponse({
+        ok: true,
+        scriptVersion: 'V43',
+        status: 'VERIFIED_OWNER_DEVICE',
+        slot: owners.indexOf(deviceId) + 1,
+        maxDevices: MAX_DEVICES,
+        usedSlots: owners.length,
+        ownerDeviceIds: owners,
+        ownerDeviceId: owners.join(' | '),
+        remoteTier: remoteTierVal,
+        broadcast: readActiveBroadcast(projectId, altProjectId, personName)
+      });
+    }
+
+    if (owners.length < MAX_DEVICES) {
+      owners.push(deviceId);
+      sheet.getRange(rowIndex, 3, 1, 3).setValues([[owners[0] || '', owners[1] || '', owners.length]]);
+      sheet.getRange(rowIndex, 7, 1, 2).setValues([[nowStr, visits]]);
+      syncProjectToLegacyAndResetSheets_(projectId, customerName || String(rowVals[1] || projectId), owners, owners.length >= 2 ? 'TERKUNCI PENUH (2/2)' : 'TERKUNCI (1/2)', nowStr, remoteTierVal, owners.length === 1 ? 'Klaim Slot 1/2' : 'Klaim Slot 2/2');
+      return jsonResponse({
+        ok: true,
+        scriptVersion: 'V43',
+        status: owners.length === 1 ? 'CLAIMED_SLOT_1_OF_2' : 'CLAIMED_SLOT_2_OF_2',
+        slot: owners.length,
+        maxDevices: MAX_DEVICES,
+        usedSlots: owners.length,
+        ownerDeviceIds: owners,
+        ownerDeviceId: owners.join(' | '),
+        remoteTier: remoteTierVal,
+        broadcast: readActiveBroadcast(projectId, altProjectId, personName)
+      });
+    }
+
+    var prevRejected = Number(rowVals[10]) || 0;
+    var nextRejected = prevRejected + 1;
+    sheet.getRange(rowIndex, 7).setValue(nowStr);
+    sheet.getRange(rowIndex, 11).setValue(nextRejected);
+    syncProjectToLegacyAndResetSheets_(
+      projectId,
+      customerName || String(rowVals[1] || projectId),
+      owners,
+      'TERKUNCI PENUH (2/2)',
+      nowStr,
+      remoteTierVal,
+      'HP ke-3+ Ditolak ke-' + nextRejected + ' (' + deviceId + ') pada ' + nowStr,
+      nextRejected
+    );
+    return jsonResponse({
+      ok: false,
+      scriptVersion: 'V43',
+      status: 'REJECTED_MAX_2_DEVICES',
+      reason: 'MAX_2_DEVICES_ALREADY_CLAIMED',
+      maxDevices: MAX_DEVICES,
+      usedSlots: owners.length,
+      rejectedAttempts: nextRejected,
+      ownerDeviceIds: owners,
+      ownerDeviceId: owners.join(' | '),
+      remoteTier: remoteTierVal,
+      broadcast: readActiveBroadcast(projectId, altProjectId, personName)
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
